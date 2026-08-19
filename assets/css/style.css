@@ -1,0 +1,166 @@
+﻿/* =========================================================
+   The Hide Out Cafe POS - Sleek Black & Crimson Red Theme
+   ========================================================= */
+
+:root {
+  --primary: #dc2626;
+  --primary-hover: #b91c1c;
+  --primary-dark: #991b1b;
+  --primary-light: #fee2e2;
+  --dark-bg: #09090b;
+  --dark-card: #18181b;
+  --dark-border: #27272a;
+  --text-main: #18181b;
+  --text-light: #f4f4f5;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f4f4f6;
+  color: #18181b;
+}
+
+/* Smooth Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+::-webkit-scrollbar-thumb {
+  background: #dc2626;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #991b1b;
+}
+
+/* Glassmorphism & Cards */
+.card-cafe {
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
+}
+.card-cafe:hover {
+  box-shadow: 0 10px 25px -4px rgba(220, 38, 38, 0.1);
+  border-color: #fca5a5;
+}
+
+/* POS Product Card */
+.pos-product-card {
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s ease;
+  user-select: none;
+}
+.pos-product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -6px rgba(220, 38, 38, 0.18);
+  border-color: #dc2626;
+}
+.pos-product-card:active {
+  transform: scale(0.98);
+}
+
+/* Category Pill Active State */
+.cat-pill.active {
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+  border-color: #b91c1c;
+}
+
+/* KDS Status Badges & Animations */
+.kds-card-pending {
+  border-top: 4px solid #ef4444;
+}
+.kds-card-preparing {
+  border-top: 4px solid #f59e0b;
+}
+.kds-card-ready {
+  border-top: 4px solid #10b981;
+}
+
+@keyframes pulse-red {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+.pulse-badge {
+  animation: pulse-red 2s infinite ease-in-out;
+}
+
+/* Table Management Status Colors */
+.table-available {
+  background-color: #f0fdf4;
+  border-color: #86efac;
+  color: #166534;
+}
+.table-occupied {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+.table-billed {
+  background-color: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.table-reserved {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e40af;
+}
+
+/* ----------------------------------------------------
+   THERMAL RECEIPT PRINT STYLES (80mm & 58mm Standard)
+   ---------------------------------------------------- */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #thermal-receipt-area, #thermal-receipt-area * {
+    visibility: visible;
+  }
+  #thermal-receipt-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    margin: 0;
+    padding: 2mm 3mm;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    line-height: 1.25;
+    color: #000000 !important;
+    background: #ffffff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+.receipt-container {
+  width: 80mm;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 15px 12px;
+  background: #ffffff;
+  color: #111827;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  border: 1px dashed #d1d5db;
+}
+
+.receipt-divider {
+  border-top: 1px dashed #374151;
+  margin: 8px 0;
+}
+.receipt-divider-double {
+  border-top: 1px double #111827;
+  margin: 8px 0;
+}
