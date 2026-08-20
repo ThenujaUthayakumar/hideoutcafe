@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In | <?= e($settings['cafe_name'] ?? 'The Hide Out Cafe') ?></title>
-    
+<link rel="icon" type="image/x-icon" href="<?= BASE_URL ?>/assets/img/hideout.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <!-- Brand Header -->
         <div class="text-center mb-8">
             <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-700 to-red-500 shadow-xl shadow-red-900/50 text-white mb-4">
-                <i class="fa-solid fa-mug-hot text-3xl"></i>
+                    <img src="/assets/img/hideout.ico" alt="Cafe Logo" class="w-full h-full object-cover">
             </div>
             <h2 class="text-3xl font-black tracking-tight text-white"><?= e($settings['cafe_name'] ?? 'The Hide Out Cafe') ?></h2>
             <p class="text-xs font-bold text-red-500 uppercase tracking-widest mt-1.5"><?= e($settings['cafe_tagline'] ?? 'Specialty Coffee & Bistro - Sri Lanka') ?></p>
@@ -152,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="text-center mt-6 text-xs text-stone-500">
-            <?= APP_NAME ?> &copy; <?= date('Y') ?> &bull; Sri Lanka Edition
+            <?= APP_NAME ?> &copy; <?= date('Y') ?> &bull; IT Intelligence
         </div>
     </div>
 

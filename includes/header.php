@@ -17,7 +17,7 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($title ?? APP_NAME) ?> | <?= e($settings['cafe_name'] ?? APP_NAME) ?></title>
-    
+<link rel="icon" type="image/x-icon" href="<?= BASE_URL ?>/assets/img/hideout.ico">
     <!-- Google Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

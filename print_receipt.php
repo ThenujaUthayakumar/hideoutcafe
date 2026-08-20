@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * The Hide Out Cafe - Thermal Slip Print Window
  */
@@ -51,6 +51,7 @@ $order['items'] = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id
     <!-- 80mm / 58mm Thermal Slip Content -->
     <div class="bg-white shadow-xl rounded-xl overflow-hidden">
         <?php require __DIR__ . '/includes/receipt_template.php'; ?>
+<?php require __DIR__ . '/includes/kitchen_receipt_template.php'; ?>
     </div>
 
     <?php if ($autoPrint): ?>

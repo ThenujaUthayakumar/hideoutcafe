@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Aura Cafe POS - Customer Directory & Loyalty Program
  */
@@ -70,35 +70,35 @@ require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';
 ?>
 
-<main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#fbf9f6]">
+<main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#0c0c0e]">
     <div class="max-w-7xl mx-auto space-y-6">
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-                <h2 class="text-2xl font-black tracking-tight text-stone-900">Customers & Loyalty Program</h2>
-                <p class="text-xs text-stone-500">Manage cafe regulars, view reward points, and purchase history</p>
+                <h2 class="text-2xl font-black tracking-tight text-white">Customers & Loyalty Program</h2>
+                <p class="text-xs text-stone-400">Manage cafe regulars, view reward points, and purchase history</p>
             </div>
-            <button onclick="openCustomerModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-800 hover:bg-amber-700 text-white font-bold rounded-2xl text-xs shadow-md transition">
+            <button onclick="openCustomerModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-2xl text-xs shadow-md transition">
                 <i class="fa-solid fa-user-plus"></i> Add New Customer
             </button>
         </div>
 
         <!-- Search Bar -->
-        <div class="card-cafe p-4">
+        <div class="card-cafe-dark p-4">
             <form method="GET" action="customers.php" class="flex gap-3 text-xs">
                 <div class="flex-1 relative">
-                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-stone-400"><i class="fa-solid fa-magnifying-glass"></i></span>
-                    <input type="text" name="q" value="<?= e($query) ?>" placeholder="Search customer by name, phone or email..." class="w-full pl-10 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-stone-500"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" name="q" value="<?= e($query) ?>" placeholder="Search customer by name, phone or email..." class="w-full pl-10 pr-3 py-2.5 rounded-xl">
                 </div>
-                <button type="submit" class="px-5 py-2.5 bg-stone-800 text-white font-bold rounded-xl shadow-xs">Search</button>
+                <button type="submit" class="px-5 py-2.5 bg-red-600 text-white font-bold rounded-xl shadow-xs">Search</button>
             </form>
         </div>
 
         <!-- Table -->
-        <div class="card-cafe overflow-hidden">
+        <div class="card-cafe-dark overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-xs text-left">
-                    <thead class="bg-stone-100/90 text-stone-600 font-bold uppercase text-[10px] tracking-wider border-b border-stone-200">
+                    <thead class="bg-stone-900 text-stone-400 font-bold uppercase text-[10px] tracking-wider border-b border-stone-700">
                         <tr>
                             <th class="p-3.5">Customer Name</th>
                             <th class="p-3.5">Phone Number</th>
@@ -109,35 +109,35 @@ require_once __DIR__ . '/includes/sidebar.php';
                             <th class="p-3.5 text-center">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-stone-100">
+                    <tbody class="divide-y divide-stone-800">
                         <?php if (empty($customers)): ?>
-                            <tr><td colspan="7" class="p-8 text-center text-stone-400">No customers found.</td></tr>
+                            <tr><td colspan="7" class="p-8 text-center text-stone-500">No customers found.</td></tr>
                         <?php else: ?>
                             <?php foreach ($customers as $c): ?>
-                            <tr class="hover:bg-stone-50 transition">
+                            <tr class="hover:bg-stone-800 transition">
                                 <td class="p-3.5">
-                                    <span class="font-bold text-stone-900 text-sm block"><?= e($c['name']) ?></span>
+                                    <span class="font-bold text-white text-sm block"><?= e($c['name']) ?></span>
                                     <?php if (!empty($c['notes'])): ?>
-                                        <span class="text-[11px] text-amber-700 italic block mt-0.5"><?= e($c['notes']) ?></span>
+                                        <span class="text-[11px] text-red-400 italic block mt-0.5"><?= e($c['notes']) ?></span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="p-3.5 font-semibold text-stone-700"><?= e($c['phone']) ?></td>
-                                <td class="p-3.5 text-stone-500"><?= e($c['email'] ?? '-') ?></td>
-                                <td class="p-3.5 text-center font-bold text-stone-800"><?= (int)$c['order_count'] ?></td>
+                                <td class="p-3.5 font-semibold text-stone-300"><?= e($c['phone']) ?></td>
+                                <td class="p-3.5 text-stone-400"><?= e($c['email'] ?? '-') ?></td>
+                                <td class="p-3.5 text-center font-bold text-stone-200"><?= (int)$c['order_count'] ?></td>
                                 <td class="p-3.5 text-right">
-                                    <span class="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 font-black text-xs"><?= (int)$c['loyalty_points'] ?> pts</span>
+                                    <span class="px-2.5 py-1 rounded-xl bg-red-950 text-red-400 border border-red-800 font-black text-xs"><?= (int)$c['loyalty_points'] ?> pts</span>
                                 </td>
-                                <td class="p-3.5 text-right font-black text-stone-900 text-sm"><?= $currency ?><?= number_format($c['total_spent'], 2) ?></td>
+                                <td class="p-3.5 text-right font-black text-white text-sm"><?= $currency ?><?= number_format($c['total_spent'], 2) ?></td>
                                 <td class="p-3.5 text-center">
                                     <div class="flex items-center justify-center gap-1.5">
-                                        <button onclick="editCustomer(<?= htmlspecialchars(json_encode($c), ENT_QUOTES, 'UTF-8') ?>)" class="p-2 hover:bg-stone-200 text-stone-700 rounded-xl transition" title="Edit">
+                                        <button onclick="editCustomer(<?= htmlspecialchars(json_encode($c), ENT_QUOTES, 'UTF-8') ?>)" class="p-2 hover:bg-stone-700 text-stone-300 rounded-xl transition" title="Edit">
                                             <i class="fa-solid fa-pen"></i>
                                         </button>
                                         <?php if ($c['id'] > 1 && hasRole([ROLE_ADMIN, ROLE_MANAGER])): ?>
                                             <form method="POST" action="customers.php" onsubmit="return confirm('Delete customer <?= addslashes($c['name']) ?>?');" class="inline">
                                                 <input type="hidden" name="action" value="delete_customer">
                                                 <input type="hidden" name="customer_id" value="<?= $c['id'] ?>">
-                                                <button type="submit" class="p-2 hover:bg-rose-100 text-rose-600 rounded-xl transition" title="Delete">
+                                                <button type="submit" class="p-2 hover:bg-rose-950 text-rose-500 rounded-xl transition" title="Delete">
                                                     <i class="fa-solid fa-trash"></i>
                                                 </button>
                                             </form>
@@ -156,44 +156,44 @@ require_once __DIR__ . '/includes/sidebar.php';
 </main>
 
 <!-- Add/Edit Customer Modal -->
-<div id="customer-form-modal" class="modal-overlay fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200">
-        <div class="flex items-center justify-between pb-3 border-b border-stone-100">
-            <h3 id="cust-modal-title" class="font-extrabold text-stone-900 text-base">Add Customer</h3>
-            <button onclick="closeModal('customer-form-modal')" class="text-stone-400 hover:text-stone-600 p-1"><i class="fa-solid fa-xmark"></i></button>
+<div id="customer-form-modal" class="modal-overlay fixed inset-0 bg-black/70 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-stone-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-700">
+        <div class="flex items-center justify-between pb-3 border-b border-stone-700">
+            <h3 id="cust-modal-title" class="font-extrabold text-white text-base">Add Customer</h3>
+            <button onclick="closeModal('customer-form-modal')" class="text-stone-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form method="POST" action="customers.php" class="py-4 space-y-3">
             <input type="hidden" name="action" value="save_customer">
             <input type="hidden" name="customer_id" id="cust_form_id">
 
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Full Name *</label>
-                <input type="text" name="name" id="cust_form_name" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
+                <label class="block text-xs font-bold text-stone-300 mb-1">Full Name *</label>
+                <input type="text" name="name" id="cust_form_name" required class="w-full px-3.5 py-2 rounded-xl text-xs">
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Phone Number *</label>
-                <input type="text" name="phone" id="cust_form_phone" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
+                <label class="block text-xs font-bold text-stone-300 mb-1">Phone Number *</label>
+                <input type="text" name="phone" id="cust_form_phone" required class="w-full px-3.5 py-2 rounded-xl text-xs">
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Email Address</label>
-                <input type="email" name="email" id="cust_form_email" class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
+                <label class="block text-xs font-bold text-stone-300 mb-1">Email Address</label>
+                <input type="email" name="email" id="cust_form_email" class="w-full px-3.5 py-2 rounded-xl text-xs">
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Loyalty Points Balance</label>
-                <input type="number" name="loyalty_points" id="cust_form_points" value="0" class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-amber-900">
+                <label class="block text-xs font-bold text-stone-300 mb-1">Loyalty Points Balance</label>
+                <input type="number" name="loyalty_points" id="cust_form_points" value="0" class="w-full px-3.5 py-2 rounded-xl text-xs font-bold">
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Address / Delivery Notes</label>
-                <textarea name="address" id="cust_form_address" rows="2" class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></textarea>
+                <label class="block text-xs font-bold text-stone-300 mb-1">Address / Delivery Notes</label>
+                <textarea name="address" id="cust_form_address" rows="2" class="w-full px-3.5 py-2 rounded-xl text-xs"></textarea>
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Preferences & Notes</label>
-                <input type="text" name="notes" id="cust_form_notes" placeholder="e.g. Always takes oat milk" class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
+                <label class="block text-xs font-bold text-stone-300 mb-1">Preferences &amp; Notes</label>
+                <input type="text" name="notes" id="cust_form_notes" placeholder="e.g. Always takes oat milk" class="w-full px-3.5 py-2 rounded-xl text-xs">
             </div>
 
             <div class="pt-2 flex gap-2">
-                <button type="button" onclick="closeModal('customer-form-modal')" class="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold rounded-xl text-xs">Cancel</button>
-                <button type="submit" class="flex-1 py-2.5 bg-amber-800 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-md">Save Customer</button>
+                <button type="button" onclick="closeModal('customer-form-modal')" class="flex-1 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold rounded-xl text-xs">Cancel</button>
+                <button type="submit" class="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md">Save Customer</button>
             </div>
         </form>
     </div>

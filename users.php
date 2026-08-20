@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Aura Cafe POS - Staff Management & Role-Based Access Control (RBAC)
  */
@@ -66,23 +66,23 @@ require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';
 ?>
 
-<main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#fbf9f6]">
+<<main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#0c0c0e]">
     <div class="max-w-6xl mx-auto space-y-6">
 
         <div class="flex items-center justify-between">
             <div>
-                <h2 class="text-2xl font-black tracking-tight text-stone-900">Staff & Role Permissions</h2>
-                <p class="text-xs text-stone-500">Manage cashier, barista, manager, and administrator staff accounts</p>
+                <h2 class="text-2xl font-black tracking-tight text-white">Staff & Role Permissions</h2>
+                <p class="text-xs text-stone-400">Manage cashier, barista, manager, and administrator staff accounts</p>
             </div>
-            <button onclick="openStaffModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-800 hover:bg-amber-700 text-white font-bold rounded-2xl text-xs shadow-md transition">
+            <button onclick="openStaffModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-2xl text-xs shadow-md transition">
                 <i class="fa-solid fa-user-plus"></i> Add Staff Member
             </button>
         </div>
 
-        <div class="card-cafe overflow-hidden">
+        <div class="card-cafe-dark overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-xs text-left">
-                    <thead class="bg-stone-100/90 text-stone-600 font-bold uppercase text-[10px] tracking-wider border-b border-stone-200">
+                    <thead class="bg-stone-900 text-stone-400 font-bold uppercase text-[10px] tracking-wider border-b border-stone-700">
                         <tr>
                             <th class="p-3.5">Staff Name</th>
                             <th class="p-3.5">Email Address</th>
@@ -92,41 +92,41 @@ require_once __DIR__ . '/includes/sidebar.php';
                             <th class="p-3.5 text-center">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-stone-100">
+                    <tbody class="divide-y divide-stone-800">
                         <?php foreach ($users as $u): ?>
-                        <tr class="hover:bg-stone-50 transition">
-                            <td class="p-3.5 font-bold text-stone-900 flex items-center gap-2.5">
-                                <div class="w-8 h-8 rounded-xl bg-amber-800 text-white flex items-center justify-center font-bold text-xs">
+                        <tr class="hover:bg-stone-800 transition">
+                            <td class="p-3.5 font-bold text-white flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center font-bold text-xs">
                                     <?= strtoupper(substr($u['name'], 0, 1)) ?>
                                 </div>
                                 <span><?= e($u['name']) ?></span>
                             </td>
-                            <td class="p-3.5 font-medium text-stone-700"><?= e($u['email']) ?></td>
+                            <td class="p-3.5 font-medium text-stone-300"><?= e($u['email']) ?></td>
                             <td class="p-3.5">
                                 <?php
-                                $roleBadge = 'bg-stone-100 text-stone-800';
-                                if ($u['role'] === 'admin') $roleBadge = 'bg-rose-100 text-rose-900 font-extrabold';
-                                if ($u['role'] === 'manager') $roleBadge = 'bg-amber-100 text-amber-900 font-extrabold';
-                                if ($u['role'] === 'cashier') $roleBadge = 'bg-sky-100 text-sky-900 font-bold';
+                                $roleBadge = 'bg-stone-800 text-stone-300';
+                                if ($u['role'] === 'admin') $roleBadge = 'bg-rose-950 text-rose-400 font-extrabold';
+                                if ($u['role'] === 'manager') $roleBadge = 'bg-amber-950 text-amber-400 font-extrabold';
+                                if ($u['role'] === 'cashier') $roleBadge = 'bg-sky-950 text-sky-400 font-bold';
                                 ?>
                                 <span class="px-2.5 py-0.5 rounded-full text-[10px] uppercase <?= $roleBadge ?>"><?= e($u['role']) ?></span>
                             </td>
-                            <td class="p-3.5 text-stone-500"><?= e($u['phone'] ?: '-') ?></td>
+                            <td class="p-3.5 text-stone-400"><?= e($u['phone'] ?: '-') ?></td>
                             <td class="p-3.5">
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase <?= $u['status'] === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-600' ?>">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase <?= $u['status'] === 'active' ? 'bg-emerald-950 text-emerald-400' : 'bg-stone-800 text-stone-500' ?>">
                                     <?= e($u['status']) ?>
                                 </span>
                             </td>
                             <td class="p-3.5 text-center">
                                 <div class="flex items-center justify-center gap-1.5">
-                                    <button onclick="editStaff(<?= htmlspecialchars(json_encode($u), ENT_QUOTES, 'UTF-8') ?>)" class="p-2 hover:bg-stone-200 text-stone-700 rounded-xl transition" title="Edit">
+                                    <button onclick="editStaff(<?= htmlspecialchars(json_encode($u), ENT_QUOTES, 'UTF-8') ?>)" class="p-2 hover:bg-stone-700 text-stone-300 rounded-xl transition" title="Edit">
                                         <i class="fa-solid fa-pen"></i>
                                     </button>
                                     <?php if ($u['id'] > 1 && $u['id'] !== $user['id']): ?>
                                         <form method="POST" action="users.php" onsubmit="return confirm('Delete staff account <?= addslashes($u['name']) ?>?');" class="inline">
                                             <input type="hidden" name="action" value="delete_user">
                                             <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
-                                            <button type="submit" class="p-2 hover:bg-rose-50 text-rose-600 rounded-xl transition" title="Delete">
+                                            <button type="submit" class="p-2 hover:bg-rose-950 text-rose-500 rounded-xl transition" title="Delete">
                                                 <i class="fa-solid fa-trash"></i>
                                             </button>
                                         </form>

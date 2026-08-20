@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    The Hide Out Cafe POS - Sleek Black & Crimson Red Theme
    ========================================================= */
 
@@ -50,6 +50,19 @@ body {
 .card-cafe:hover {
   box-shadow: 0 10px 25px -4px rgba(220, 38, 38, 0.1);
   border-color: #fca5a5;
+}
+
+/* Dark variant of card – used on dark-themed admin pages */
+.card-cafe-dark {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease-in-out;
+}
+.card-cafe-dark:hover {
+  box-shadow: 0 10px 25px -4px rgba(220, 38, 38, 0.15);
+  border-color: #dc2626;
 }
 
 /* POS Product Card */
@@ -155,7 +168,17 @@ body {
   font-size: 13px;
   border: 1px dashed #d1d5db;
 }
-
+.receipt-logo {
+  display: block;
+  width: 60mm;
+  max-width: 100%;
+  height: auto;
+  max-height: 28mm;
+  margin: 0 auto 2mm;
+  object-fit: contain;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
 .receipt-divider {
   border-top: 1px dashed #374151;
   margin: 8px 0;
@@ -163,4 +186,37 @@ body {
 .receipt-divider-double {
   border-top: 1px double #111827;
   margin: 8px 0;
+}
+
+/* ----------------------------------------------------
+   Dark Theme Form Elements – ensure input text is visible
+   on all pages regardless of container background.
+   Uses !important to override inline Tailwind utilities.
+   ---------------------------------------------------- */
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]),
+textarea,
+select {
+  background-color: #18181b !important; /* dark-card */
+  color: #f4f4f5 !important;           /* text-light / zinc-100 */
+  border: 1px solid #3f3f46 !important; /* zinc-700 – visible border */
+  border-radius: 0.75rem;
+}
+input::placeholder, textarea::placeholder {
+  color: #a1a1aa !important; /* zinc-400 */
+}
+/* Visible focus ring */
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px;
+  border-color: var(--primary) !important;
+}
+/* Option elements inside select */
+select option {
+  background-color: #18181b;
+  color: #f4f4f5;
+}
+/* Checkbox / radio keep their styling */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--primary);
 }
