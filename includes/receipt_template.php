@@ -10,6 +10,7 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
 <div class="receipt-container" id="thermal-receipt-area">
     <!-- Header / Brand -->
     <div class="text-center pb-2">
+        <img src="<?= BASE_URL ?>/assets/img/HideOutLogo.png" alt="<?= e($settings['cafe_name'] ?? 'THE HIDE OUT CAFE') ?>" class="receipt-logo">
         <div class="font-black text-base uppercase tracking-wider"><?= e($settings['cafe_name'] ?? 'THE HIDE OUT CAFE') ?></div>
         <div class="text-[11px] text-stone-600 font-medium"><?= nl2br(e($settings['receipt_header'] ?? '')) ?></div>
         <div class="text-[11px] text-stone-600"><?= e($settings['cafe_address'] ?? '') ?></div>
@@ -36,12 +37,6 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
             <span>Order Type:</span>
             <span class="font-bold uppercase"><?= e(str_replace('_', ' ', $order['order_type'])) ?><?= !empty($order['table_name']) ? ' (' . e($order['table_name']) . ')' : '' ?></span>
         </div>
-        <?php if (!empty($order['customer_name']) && $order['customer_name'] !== 'Walk-in Customer'): ?>
-        <div class="flex justify-between">
-            <span>Customer:</span>
-            <span><?= e($order['customer_name']) ?></span>
-        </div>
-        <?php endif; ?>
     </div>
 
     <div class="receipt-divider"></div>
@@ -123,8 +118,8 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
         <div class="text-[11px] text-stone-700 font-medium leading-tight">
             <?= nl2br(e($settings['receipt_footer'] ?? 'Thank you for your visit!')) ?>
         </div>
-        <div class="text-[10px] text-stone-400 font-mono tracking-widest pt-1">
+        <!-- <div class="text-[10px] text-stone-400 font-mono tracking-widest pt-1">
             * <?= e($order['invoice_no']) ?> *
-        </div>
+        </div> -->
     </div>
 </div>
