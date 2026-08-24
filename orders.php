@@ -8,6 +8,8 @@ requireAuth();
 $title = 'Orders & Sales';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+$currentUser = currentUser();
+$isCashier = hasRole(ROLE_CASHIER);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireRole([ROLE_ADMIN, ROLE_MANAGER]);
@@ -47,10 +49,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Filter query
-$dateFilter = $_GET['date'] ?? date('Y-m-d');
+$startDate = $_GET['start_date'] ?? date('Y-m-d');
+$endDate = $_GET['end_date'] ?? date('Y-m-d');
+$startDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) ? $startDate : date('Y-m-d');
+$endDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate) ? $endDate : date('Y-m-d');
+if ($startDate > $endDate) {
+    [$startDate, $endDate] = [$endDate, $startDate];
+}
 $typeFilter = $_GET['type'] ?? 'all';
 $payFilter  = $_GET['payment'] ?? 'all';
+$userFilter = (int)($_GET['user_id'] ?? 0);
 $search     = trim($_GET['q'] ?? '');
+
+$users = [];
+if (!$isCashier) {
+    $users = db()->fetchAll("SELECT id, name, role FROM users ORDER BY name ASC");
+}
 
 $sql = "SELECT o.*, t.name as table_name, u.name as cashier_name, c.name as customer_name 
         FROM orders o 
@@ -60,10 +74,17 @@ $sql = "SELECT o.*, t.name as table_name, u.name as cashier_name, c.name as cust
         WHERE 1=1";
 $params = [];
 
-if (!empty($dateFilter)) {
-    $sql .= " AND DATE(o.created_at) = :d";
-    $params[':d'] = $dateFilter;
+if ($isCashier) {
+    $sql .= " AND o.user_id = :user_id";
+    $params[':user_id'] = $currentUser['id'];
+} elseif ($userFilter > 0) {
+    $sql .= " AND o.user_id = :user_filter";
+    $params[':user_filter'] = $userFilter;
 }
+
+$sql .= " AND DATE(o.created_at) BETWEEN :start_date AND :end_date";
+$params[':start_date'] = $startDate;
+$params[':end_date'] = $endDate;
 if ($typeFilter !== 'all') {
     $sql .= " AND o.order_type = :t";
     $params[':t'] = $typeFilter;
@@ -80,17 +101,48 @@ if (!empty($search)) {
 $sql .= " ORDER BY o.id DESC LIMIT 100";
 $orders = db()->fetchAll($sql, $params);
 
-// Daily summary
+// Sales summary before expenses
 $dailySummary = db()->fetchOne(
     "SELECT 
         COUNT(id) as total_count,
-        COALESCE(SUM(grand_total), 0) as total_sales,
-        COALESCE(SUM(tax_amount), 0) as total_tax,
+        COALESCE(SUM(subtotal), 0) as total_sales,
         COALESCE(SUM(discount_amount), 0) as total_discount
      FROM orders 
-     WHERE DATE(created_at) = :d AND payment_status = 'paid' AND order_status != 'cancelled'",
-    [':d' => $dateFilter]
+      WHERE DATE(created_at) BETWEEN :start_date AND :end_date AND payment_status = 'paid' AND order_status != 'cancelled'"
+    . ($isCashier ? " AND user_id = :user_id" : ($userFilter > 0 ? " AND user_id = :user_filter" : '')),
+    array_merge(
+        [':start_date' => $startDate, ':end_date' => $endDate],
+        $isCashier
+            ? [':user_id' => $currentUser['id']]
+            : ($userFilter > 0 ? [':user_filter' => $userFilter] : [])
+    )
 );
+
+$expenseParams = [':expense_start_date' => $startDate, ':expense_end_date' => $endDate];
+$expenseUserFilter = '';
+if ($isCashier) {
+    $expenseUserFilter = " AND user_id = :expense_user_id";
+    $expenseParams[':expense_user_id'] = $currentUser['id'];
+} elseif ($userFilter > 0) {
+    $expenseUserFilter = " AND user_id = :expense_user_id";
+    $expenseParams[':expense_user_id'] = $userFilter;
+}
+
+$expenseSummary = db()->fetchOne(
+    "SELECT COALESCE(SUM(amount), 0) as total
+     FROM expenses
+     WHERE expense_date BETWEEN :expense_start_date AND :expense_end_date" . $expenseUserFilter,
+    $expenseParams
+);
+$currentShift = getOpenCashRegister();
+$shiftSales = $currentShift ? getCashRegisterSalesSummary($currentShift) : [];
+$shiftExpenses = $currentShift ? getCashRegisterExpenseTotal($currentShift) : 0;
+$openingFloat = $currentShift ? (float)$currentShift['opening_cash'] : 0;
+$netAmount = $currentShift
+    ? $openingFloat
+        + (float)($shiftSales['cash_sales'] ?? 0)
+        - $shiftExpenses
+    : 0;
 
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';
@@ -113,10 +165,14 @@ require_once __DIR__ . '/includes/sidebar.php';
 
         <!-- Filter Bar -->
         <div class="bg-stone-900 border border-stone-800 p-4 rounded-2xl shadow-lg">
-            <form method="GET" action="orders.php" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+            <form method="GET" action="orders.php" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 text-xs">
                 <div>
-                    <label class="block font-bold text-stone-300 mb-1">Date</label>
-                    <input type="date" name="date" value="<?= e($dateFilter) ?>" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white">
+                    <label class="block font-bold text-stone-300 mb-1">From</label>
+                    <input type="date" name="start_date" value="<?= e($startDate) ?>" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white">
+                </div>
+                <div>
+                    <label class="block font-bold text-stone-300 mb-1">To</label>
+                    <input type="date" name="end_date" value="<?= e($endDate) ?>" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white">
                 </div>
                 <div>
                     <label class="block font-bold text-stone-300 mb-1">Order Type</label>
@@ -136,6 +192,19 @@ require_once __DIR__ . '/includes/sidebar.php';
                         <option value="upi" <?= $payFilter === 'upi' ? 'selected' : '' ?>>QR / UPI</option>
                     </select>
                 </div>
+                <?php if (!$isCashier): ?>
+                <div>
+                    <label class="block font-bold text-stone-300 mb-1">User</label>
+                    <select name="user_id" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white">
+                        <option value="0">All Users</option>
+                        <?php foreach ($users as $user): ?>
+                            <option value="<?= (int)$user['id'] ?>" <?= $userFilter === (int)$user['id'] ? 'selected' : '' ?>>
+                                <?= e($user['name']) ?> (<?= e(ucfirst($user['role'])) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
                 <div>
                     <label class="block font-bold text-stone-300 mb-1">Search Invoice/Customer</label>
                     <input type="text" name="q" value="<?= e($search) ?>" placeholder="e.g. HOC-..." class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white">
@@ -149,7 +218,11 @@ require_once __DIR__ . '/includes/sidebar.php';
         </div>
 
         <!-- KPI Strip -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div class="bg-stone-900 border border-stone-800 p-4 rounded-2xl">
+                <span class="text-[10px] font-bold text-stone-400 uppercase">Opening Float</span>
+                <div class="text-lg font-black text-amber-400 mt-0.5"><?= $currency ?> <?= number_format($openingFloat, 2) ?></div>
+            </div>
             <div class="bg-stone-900 border border-stone-800 p-4 rounded-2xl">
                 <span class="text-[10px] font-bold text-stone-400 uppercase">Filtered Sales</span>
                 <div class="text-lg font-black text-red-400 mt-0.5"><?= $currency ?> <?= number_format($dailySummary['total_sales'] ?? 0, 2) ?></div>
@@ -163,8 +236,8 @@ require_once __DIR__ . '/includes/sidebar.php';
                 <div class="text-lg font-black text-rose-400 mt-0.5">-<?= $currency ?> <?= number_format($dailySummary['total_discount'] ?? 0, 2) ?></div>
             </div>
             <div class="bg-stone-900 border border-stone-800 p-4 rounded-2xl">
-                <span class="text-[10px] font-bold text-stone-400 uppercase">Tax Collected</span>
-                <div class="text-lg font-black text-white mt-0.5"><?= $currency ?> <?= number_format($dailySummary['total_tax'] ?? 0, 2) ?></div>
+                <span class="text-[10px] font-bold text-stone-400 uppercase">Net Amount</span>
+                <div class="text-lg font-black text-white mt-0.5"><?= $currency ?> <?= number_format($netAmount, 2) ?></div>
             </div>
         </div>
 

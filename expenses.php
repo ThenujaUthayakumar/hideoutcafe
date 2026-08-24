@@ -3,12 +3,28 @@
  * Aura Cafe POS - Expense Tracking & Petty Cash Logs
  */
 require_once __DIR__ . '/config/functions.php';
-requireRole([ROLE_ADMIN, ROLE_MANAGER]);
+requireAuth();
 
 $title = 'Expenses';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? '$';
 $user = currentUser();
+$isAdmin = hasRole(ROLE_ADMIN);
+
+try {
+    $requestNoteColumn = db()->fetchOne("SHOW COLUMNS FROM expenses LIKE 'request_note'");
+    if (!$requestNoteColumn) {
+        db()->query("ALTER TABLE expenses ADD COLUMN request_note TEXT NULL AFTER description");
+    }
+    $requestStatusColumn = db()->fetchOne("SHOW COLUMNS FROM expenses LIKE 'request_status'");
+    if (!$requestStatusColumn) {
+        db()->query("ALTER TABLE expenses ADD COLUMN request_status ENUM('not_requested', 'pending', 'resolved') NOT NULL DEFAULT 'not_requested' AFTER request_note");
+    } elseif (strpos($requestStatusColumn['Type'], "'not_requested'") === false) {
+        db()->query("ALTER TABLE expenses MODIFY COLUMN request_status ENUM('not_requested', 'pending', 'resolved') NOT NULL DEFAULT 'not_requested'");
+    }
+} catch (Exception $e) {
+    // Existing installations can continue until the schema is upgraded.
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -18,17 +34,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount = (float)$_POST['amount'];
         $desc = sanitize($_POST['description']);
         $date = sanitize($_POST['expense_date'] ?? date('Y-m-d'));
+        $requestNote = sanitize($_POST['request_note'] ?? '');
 
         db()->query(
-            "INSERT INTO expenses (category, amount, description, user_id, expense_date) VALUES (:cat, :amt, :desc, :uid, :date)",
-            [':cat' => $category, ':amt' => $amount, ':desc' => $desc, ':uid' => $user['id'], ':date' => $date]
+            "INSERT INTO expenses (category, amount, description, request_note, request_status, user_id, expense_date) VALUES (:cat, :amt, :desc, :request_note, :request_status, :uid, :date)",
+            [':cat' => $category, ':amt' => $amount, ':desc' => $desc, ':request_note' => $requestNote, ':request_status' => $requestNote !== '' ? 'pending' : 'not_requested', ':uid' => $user['id'], ':date' => $date]
         );
         setFlash('success', 'Expense recorded successfully.');
         header("Location: " . BASE_URL . "/expenses.php");
         exit;
     }
 
+    if ($action === 'update_request_note') {
+        $id = (int)$_POST['expense_id'];
+        $requestNote = sanitize($_POST['request_note'] ?? '');
+        $existingRequest = db()->fetchOne(
+            "SELECT request_status FROM expenses WHERE id = :id AND user_id = :user_id",
+            [':id' => $id, ':user_id' => $user['id']]
+        );
+        if (!$existingRequest || $existingRequest['request_status'] === 'resolved') {
+            setFlash('error', 'This expense request has already been resolved by Admin.');
+            header("Location: " . BASE_URL . "/expenses.php");
+            exit;
+        }
+        db()->query(
+            "UPDATE expenses SET request_note = :request_note, request_status = 'pending' WHERE id = :id AND user_id = :user_id",
+            [':request_note' => $requestNote, ':id' => $id, ':user_id' => $user['id']]
+        );
+        setFlash('success', 'Request note sent to Admin.');
+        header("Location: " . BASE_URL . "/expenses.php");
+        exit;
+    }
+
+    if ($action === 'accept_request') {
+        if (!$isAdmin) {
+            setFlash('error', 'Only Admin can accept expense requests.');
+            header("Location: " . BASE_URL . "/expenses.php");
+            exit;
+        }
+
+        $id = (int)$_POST['expense_id'];
+        db()->query("UPDATE expenses SET request_status = 'resolved' WHERE id = :id", [':id' => $id]);
+        setFlash('success', 'Expense request marked as resolved.');
+        header("Location: " . BASE_URL . "/expenses.php");
+        exit;
+    }
+
+    if ($action === 'edit_expense') {
+        if (!$isAdmin) {
+            setFlash('error', 'Only Admin can edit expenses.');
+            header("Location: " . BASE_URL . "/expenses.php");
+            exit;
+        }
+
+        $id = (int)$_POST['expense_id'];
+        $category = sanitize($_POST['category'] ?? 'Miscellaneous');
+        $amount = (float)($_POST['amount'] ?? 0);
+        $desc = sanitize($_POST['description'] ?? '');
+        $date = sanitize($_POST['expense_date'] ?? date('Y-m-d'));
+        $requestNote = sanitize($_POST['request_note'] ?? '');
+        db()->query(
+            "UPDATE expenses SET category = :category, amount = :amount, description = :description,
+             expense_date = :expense_date, request_note = :request_note, request_status = 'resolved' WHERE id = :id",
+            [
+                ':category' => $category,
+                ':amount' => $amount,
+                ':description' => $desc,
+                ':expense_date' => $date,
+                ':request_note' => $requestNote,
+                ':id' => $id
+            ]
+        );
+        setFlash('success', 'Expense updated successfully.');
+        header("Location: " . BASE_URL . "/expenses.php");
+        exit;
+    }
+
     if ($action === 'delete_expense') {
+        if (!$isAdmin) {
+            setFlash('error', 'Only Admin can delete expenses.');
+            header("Location: " . BASE_URL . "/expenses.php");
+            exit;
+        }
+
         $id = (int)$_POST['expense_id'];
         db()->query("DELETE FROM expenses WHERE id = :id", [':id' => $id]);
         setFlash('success', 'Expense record deleted.');
@@ -42,9 +130,13 @@ $expenses = db()->fetchAll(
     "SELECT e.*, u.name as staff_name 
      FROM expenses e 
      JOIN users u ON e.user_id = u.id 
-     WHERE DATE_FORMAT(e.expense_date, '%Y-%m') = :m 
+     WHERE DATE_FORMAT(e.expense_date, '%Y-%m') = :m"
+     . (!$isAdmin ? " AND e.user_id = :user_id" : '') . "
      ORDER BY e.expense_date DESC, e.id DESC",
-    [':m' => $monthFilter]
+    array_merge(
+        [':m' => $monthFilter],
+        !$isAdmin ? [':user_id' => $user['id']] : []
+    )
 );
 
 $totalExpense = array_sum(array_column($expenses, 'amount'));
@@ -107,13 +199,37 @@ require_once __DIR__ . '/includes/sidebar.php';
                                 <td class="p-3.5 text-stone-500"><?= e($exp['staff_name']) ?></td>
                                 <td class="p-3.5 text-right font-black text-rose-600 text-sm"><?= $currency ?><?= number_format($exp['amount'], 2) ?></td>
                                 <td class="p-3.5 text-center">
-                                    <form method="POST" action="expenses.php" onsubmit="return confirm('Delete this expense?');" class="inline">
-                                        <input type="hidden" name="action" value="delete_expense">
-                                        <input type="hidden" name="expense_id" value="<?= $exp['id'] ?>">
-                                        <button type="submit" class="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg transition" title="Delete">
-                                            <i class="fa-solid fa-trash text-xs"></i>
+                                    <?php if (!empty($exp['request_note'])): ?>
+                                        <span class="block text-[10px] <?= $exp['request_status'] === 'resolved' ? 'text-emerald-700' : 'text-amber-700' ?> mb-1" title="Request note"><i class="fa-solid fa-note-sticky mr-1"></i><?= e($exp['request_note']) ?></span>
+                                        <span class="block text-[10px] <?= $exp['request_status'] === 'resolved' ? 'text-emerald-700' : 'text-amber-700' ?> mb-1"><?= $exp['request_status'] === 'resolved' ? 'Resolved by Admin' : 'Pending Admin review' ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($isAdmin): ?>
+                                        <?php if (!empty($exp['request_note']) && $exp['request_status'] !== 'resolved'): ?>
+                                            <form method="POST" action="expenses.php" class="inline">
+                                                <input type="hidden" name="action" value="accept_request">
+                                                <input type="hidden" name="expense_id" value="<?= $exp['id'] ?>">
+                                                <button type="submit" class="p-1.5 hover:bg-emerald-50 text-emerald-700 rounded-lg transition" title="Accept request">
+                                                    <i class="fa-solid fa-check text-xs"></i>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <button type="button" onclick='openExpenseEdit(<?= json_encode($exp, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' class="p-1.5 hover:bg-amber-50 text-amber-700 rounded-lg transition" title="Edit">
+                                            <i class="fa-solid fa-pen text-xs"></i>
                                         </button>
-                                    </form>
+                                        <form method="POST" action="expenses.php" onsubmit="return confirm('Delete this expense?');" class="inline">
+                                            <input type="hidden" name="action" value="delete_expense">
+                                            <input type="hidden" name="expense_id" value="<?= $exp['id'] ?>">
+                                            <button type="submit" class="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg transition" title="Delete">
+                                                <i class="fa-solid fa-trash text-xs"></i>
+                                            </button>
+                                        </form>
+                                    <?php elseif (($exp['request_status'] ?? 'resolved') !== 'resolved'): ?>
+                                        <button type="button" onclick='openRequestNote(<?= (int)$exp['id'] ?>, <?= json_encode($exp['request_note'] ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' class="p-1.5 hover:bg-amber-50 text-amber-700 rounded-lg transition" title="Request Admin correction">
+                                            <i class="fa-solid fa-message text-xs"></i>
+                                        </button>
+                                    <?php else: ?>
+                                        <span class="text-[10px] text-emerald-700 font-bold">Request closed</span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
@@ -168,5 +284,69 @@ require_once __DIR__ . '/includes/sidebar.php';
         </form>
     </div>
 </div>
+
+<!-- Request Admin Correction Modal -->
+<div id="expense-request-modal" class="modal-overlay fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200">
+        <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+            <h3 class="font-extrabold text-stone-900 text-base">Request Admin Correction</h3>
+            <button onclick="closeModal('expense-request-modal')" class="text-stone-400 hover:text-stone-600 p-1"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form method="POST" action="expenses.php" class="py-4 space-y-3">
+            <input type="hidden" name="action" value="update_request_note">
+            <input type="hidden" name="expense_id" id="request_expense_id">
+            <div>
+                <label class="block text-xs font-bold text-stone-700 mb-1">Note for Admin *</label>
+                <textarea name="request_note" id="request_note_input" rows="4" required placeholder="Explain what is incorrect and what should be changed..." class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></textarea>
+            </div>
+            <div class="pt-2 flex gap-2">
+                <button type="button" onclick="closeModal('expense-request-modal')" class="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold rounded-xl text-xs">Cancel</button>
+                <button type="submit" class="flex-1 py-2.5 bg-amber-800 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-md">Send Request</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<?php if ($isAdmin): ?>
+<!-- Admin Edit Expense Modal -->
+<div id="expense-edit-modal" class="modal-overlay fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200">
+        <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+            <h3 class="font-extrabold text-stone-900 text-base">Edit Expense</h3>
+            <button onclick="closeModal('expense-edit-modal')" class="text-stone-400 hover:text-stone-600 p-1"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form method="POST" action="expenses.php" class="py-4 space-y-3">
+            <input type="hidden" name="action" value="edit_expense">
+            <input type="hidden" name="expense_id" id="edit_expense_id">
+            <div><label class="block text-xs font-bold text-stone-700 mb-1">Category *</label><input type="text" name="category" id="edit_expense_category" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></div>
+            <div><label class="block text-xs font-bold text-stone-700 mb-1">Amount *</label><input type="number" step="0.01" min="0.01" name="amount" id="edit_expense_amount" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></div>
+            <div><label class="block text-xs font-bold text-stone-700 mb-1">Expense Date *</label><input type="date" name="expense_date" id="edit_expense_date" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></div>
+            <div><label class="block text-xs font-bold text-stone-700 mb-1">Description *</label><textarea name="description" id="edit_expense_description" rows="2" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></textarea></div>
+            <div><label class="block text-xs font-bold text-stone-700 mb-1">Request Note</label><textarea name="request_note" id="edit_expense_note" rows="2" class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></textarea></div>
+            <div class="pt-2 flex gap-2"><button type="button" onclick="closeModal('expense-edit-modal')" class="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold rounded-xl text-xs">Cancel</button><button type="submit" class="flex-1 py-2.5 bg-amber-800 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-md">Save Changes</button></div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<script>
+function openRequestNote(id, note) {
+    document.getElementById('request_expense_id').value = id;
+    document.getElementById('request_note_input').value = note || '';
+    openModal('expense-request-modal');
+}
+
+<?php if ($isAdmin): ?>
+function openExpenseEdit(expense) {
+    document.getElementById('edit_expense_id').value = expense.id;
+    document.getElementById('edit_expense_category').value = expense.category;
+    document.getElementById('edit_expense_amount').value = expense.amount;
+    document.getElementById('edit_expense_date').value = expense.expense_date;
+    document.getElementById('edit_expense_description').value = expense.description;
+    document.getElementById('edit_expense_note').value = expense.request_note || '';
+    openModal('expense-edit-modal');
+}
+<?php endif; ?>
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

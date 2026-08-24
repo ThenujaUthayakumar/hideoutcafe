@@ -6,10 +6,24 @@ require_once __DIR__ . '/../config/functions.php';
 requireAuth();
 
 $user = currentUser();
+
 $settings = getSettings();
-$currentShift = getActiveCashRegister($user['id']);
+
+$currentShift = getOpenCashRegister();
+
 $currentPage = basename($_SERVER['PHP_SELF'], '.php');
+
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+
+$shiftSales = $currentShift ? getCashRegisterSalesSummary($currentShift) : [];
+
+$shiftExpenses = $currentShift ? getCashRegisterExpenseTotal($currentShift) : 0;
+
+$shiftHeaderAmount = $currentShift
+    ? (float)$currentShift['opening_cash']
+        + (float)($shiftSales['cash_sales'] ?? 0)
+        - (float)$shiftExpenses
+    : 0;
 ?>
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-stone-900">
@@ -107,7 +121,7 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
                 <?php if ($currentShift): ?>
                     <button onclick="openModal('shift-register-modal')" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 hover:bg-emerald-900 transition">
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span>Shift Open (<?= $currency ?> <?= number_format($currentShift['opening_cash'] + $currentShift['total_cash_sales'], 0) ?>)</span>
+                        <span>Shift Open (<?= e($currency) ?> <?= number_format($shiftHeaderAmount, 0) ?>)</span>
                     </button>
                 <?php else: ?>
                     <button onclick="openModal('shift-register-modal')" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-950 text-red-300 border border-red-800 hover:bg-red-900 transition">

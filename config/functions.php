@@ -170,10 +170,68 @@ function getActiveCashRegister(int $userId): ?array {
     }
 }
 
+function getOpenCashRegister(): ?array {
+    try {
+        return db()->fetchOne(
+            "SELECT cr.*, u.name as cashier_name, u.role as cashier_role
+             FROM cash_registers cr
+             JOIN users u ON cr.user_id = u.id
+             WHERE cr.status = 'open'
+             ORDER BY cr.id DESC LIMIT 1"
+        );
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+    function getCashRegisterExpenseTotal(array $shift): float {
+        try {
+            $result = db()->fetchOne(
+                "SELECT COALESCE(SUM(amount), 0) as total
+                 FROM expenses
+                 WHERE user_id = :user_id
+                 AND expense_date BETWEEN DATE(:opening_time) AND DATE(COALESCE(:closing_time, NOW()))",
+                [
+                    ':user_id' => $shift['user_id'],
+                    ':opening_time' => $shift['opening_time'],
+                    ':closing_time' => $shift['closing_time'] ?? null
+                ]
+            );
+            return (float)($result['total'] ?? 0);
+        } catch (Exception $e) {
+            return 0.0;
+        }
+    }
+
 function jsonResponse(array $data, int $statusCode = 200): void {
     if (ob_get_length()) ob_clean();
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+function getCashRegisterSalesSummary(array $shift): array {
+    try {
+        return db()->fetchOne(
+            "SELECT
+                COALESCE(SUM(subtotal), 0) as subtotal,
+                COALESCE(SUM(discount_amount), 0) as discount_amount,
+                COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN grand_total ELSE 0 END), 0) as cash_sales,
+                COALESCE(SUM(CASE WHEN payment_method = 'card' THEN grand_total ELSE 0 END), 0) as card_sales
+             FROM orders
+             WHERE user_id = :user_id
+             AND created_at >= :opening_time
+             AND created_at <= COALESCE(:closing_time, NOW())
+             AND payment_status = 'paid'
+             AND order_status != 'cancelled'",
+            [
+                ':user_id' => $shift['user_id'],
+                ':opening_time' => $shift['opening_time'],
+                ':closing_time' => $shift['closing_time'] ?? null
+            ]
+        ) ?: [];
+    } catch (Exception $e) {
+        return [];
+    }
 }

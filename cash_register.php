@@ -8,13 +8,23 @@ requireAuth();
 $title = 'Shift Cash Registers';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? '$';
+$currentUser = currentUser();
+$shiftWhere = '';
+$shiftParams = [];
+
+if (hasRole(ROLE_CASHIER)) {
+    $shiftWhere = ' WHERE cr.user_id = :user_id';
+    $shiftParams[':user_id'] = $currentUser['id'];
+}
 
 $shifts = db()->fetchAll(
     "SELECT cr.*, u.name as cashier_name 
      FROM cash_registers cr 
      JOIN users u ON cr.user_id = u.id 
+     $shiftWhere
      ORDER BY cr.id DESC 
-     LIMIT 50"
+     LIMIT 50",
+    $shiftParams
 );
 
 require_once __DIR__ . '/includes/header.php';
@@ -46,6 +56,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                             <th class="p-3.5 text-right">Opening Float</th>
                             <th class="p-3.5 text-right">Cash Sales</th>
                             <th class="p-3.5 text-right">Card Sales</th>
+                            <th class="p-3.5 text-right">Expenses</th>
                             <th class="p-3.5 text-right">Closing Cash</th>
                             <th class="p-3.5 text-right">Discrepancy</th>
                             <th class="p-3.5 text-center">Status</th>
@@ -53,10 +64,16 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </thead>
                     <tbody class="divide-y divide-stone-100">
                         <?php if (empty($shifts)): ?>
-                            <tr><td colspan="10" class="p-8 text-center text-stone-400">No shift records found.</td></tr>
+                            <tr><td colspan="11" class="p-8 text-center text-stone-400">No shift records found.</td></tr>
                         <?php else: ?>
                             <?php foreach ($shifts as $s): ?>
                             <?php 
+                            $expenseAmount = getCashRegisterExpenseTotal($s);
+                            $expectedCash = (float)$s['opening_cash']
+                                + (float)$s['total_cash_sales']
+                                + (float)$s['total_card_sales']
+                                + (float)$s['total_upi_sales']
+                                - $expenseAmount;
                             $diff = (float)($s['difference_amount'] ?? 0);
                             $diffClass = $diff < 0 ? 'text-rose-600 font-black' : ($diff > 0 ? 'text-emerald-700 font-black' : 'text-stone-500');
                             ?>
@@ -68,6 +85,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                                 <td class="p-3.5 text-right font-semibold text-stone-800"><?= $currency ?><?= number_format($s['opening_cash'], 2) ?></td>
                                 <td class="p-3.5 text-right font-bold text-emerald-700"><?= $currency ?><?= number_format($s['total_cash_sales'], 2) ?></td>
                                 <td class="p-3.5 text-right font-bold text-sky-700"><?= $currency ?><?= number_format($s['total_card_sales'], 2) ?></td>
+                                <td class="p-3.5 text-right font-bold text-rose-600">-<?= $currency ?><?= number_format($expenseAmount, 2) ?></td>
                                 <td class="p-3.5 text-right font-black text-stone-900"><?= $s['closing_cash'] !== null ? $currency . number_format($s['closing_cash'], 2) : '-' ?></td>
                                 <td class="p-3.5 text-right <?= $diffClass ?>"><?= $s['difference_amount'] !== null ? ($diff >= 0 ? '+' : '') . $currency . number_format($diff, 2) : '-' ?></td>
                                 <td class="p-3.5 text-center">

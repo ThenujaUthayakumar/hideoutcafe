@@ -24,6 +24,14 @@ try {
     $db->beginTransaction();
 
     $currentUser = currentUser();
+    $activeShift = getOpenCashRegister();
+    if (!$activeShift) {
+        throw new Exception('No shift is open. Ask an administrator to open the shift first.');
+    }
+    if ((int)$activeShift['user_id'] !== (int)$currentUser['id']) {
+        throw new Exception('This shift has not been confirmed by your user account.');
+    }
+
     $invoiceNo = generateInvoiceNo();
     
     $orderType     = sanitize($data['order_type'] ?? ORDER_DINE_IN);
@@ -133,7 +141,6 @@ try {
     }
 
     // Update Cash Register shift summary
-    $activeShift = getActiveCashRegister($currentUser['id']);
     if ($activeShift) {
         $column = 'total_cash_sales';
         if ($paymentMethod === 'card') $column = 'total_card_sales';
