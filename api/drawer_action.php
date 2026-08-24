@@ -14,11 +14,16 @@ $currentUser = currentUser();
 $action = $_POST['action'] ?? '';
 
 if ($action === 'open_shift') {
+    if (!hasRole(ROLE_ADMIN)) {
+        jsonResponse(['success' => false, 'message' => 'Only an administrator can open a shift.'], 403);
+    }
+
+    if (getOpenCashRegister()) {
+        jsonResponse(['success' => false, 'message' => 'A shift is already open.'], 409);
+    }
+
     $openingCash = (float)($_POST['opening_cash'] ?? 0);
     $notes = sanitize($_POST['notes'] ?? 'Shift opened');
-
-    // Close any previous open shift for this user
-    db()->query("UPDATE cash_registers SET status = 'closed', closing_time = NOW() WHERE user_id = :uid AND status = 'open'", [':uid' => $currentUser['id']]);
 
     db()->query(
         "INSERT INTO cash_registers (user_id, opening_cash, status, notes) VALUES (:uid, :cash, 'open', :notes)",
@@ -28,7 +33,30 @@ if ($action === 'open_shift') {
     jsonResponse(['success' => true, 'message' => 'Shift opened with initial cash float.']);
 }
 
+if ($action === 'claim_shift') {
+    if (hasRole(ROLE_ADMIN)) {
+        jsonResponse(['success' => false, 'message' => 'Administrators open the shift; staff confirm it.'], 403);
+    }
+
+    $openShift = getOpenCashRegister();
+    if (!$openShift) {
+        jsonResponse(['success' => false, 'message' => 'No open shift is available to confirm.'], 404);
+    }
+
+    db()->query(
+        "UPDATE cash_registers SET user_id = :uid, notes = CONCAT(COALESCE(notes, ''), ' | Confirmed by: ', :name)
+         WHERE id = :id AND status = 'open'",
+        [':uid' => $currentUser['id'], ':name' => $currentUser['name'], ':id' => $openShift['id']]
+    );
+
+    jsonResponse(['success' => true, 'message' => 'Shift confirmed. You can now process sales.']);
+}
+
 if ($action === 'close_shift') {
+    if (hasRole(ROLE_ADMIN)) {
+        jsonResponse(['success' => false, 'message' => 'Only the confirmed shift user can close the shift.'], 403);
+    }
+
     $activeShift = getActiveCashRegister($currentUser['id']);
     if (!$activeShift) {
         jsonResponse(['success' => false, 'message' => 'No active shift found.'], 404);
@@ -37,7 +65,12 @@ if ($action === 'close_shift') {
     $closingCash = (float)($_POST['closing_cash'] ?? 0);
     $notes = sanitize($_POST['notes'] ?? '');
 
-    $expectedCash = $activeShift['opening_cash'] + $activeShift['total_cash_sales'];
+    $expenseAmount = getCashRegisterExpenseTotal($activeShift);
+    $expectedCash = $activeShift['opening_cash']
+            + $activeShift['total_cash_sales']
+            + $activeShift['total_card_sales']
+            + $activeShift['total_upi_sales']
+            - $expenseAmount;
     $diff = $closingCash - $expectedCash;
 
     db()->query(
@@ -61,6 +94,7 @@ if ($action === 'close_shift') {
         'message' => 'Shift successfully closed!', 
         'summary' => [
             'expected' => $expectedCash,
+            'expenses' => $expenseAmount,
             'counted'  => $closingCash,
             'difference' => $diff
         ]

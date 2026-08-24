@@ -312,6 +312,8 @@ CREATE TABLE `expenses` (
   `category` VARCHAR(50) NOT NULL,
   `amount` DECIMAL(10,2) NOT NULL,
   `description` TEXT NOT NULL,
+  `request_note` TEXT NULL,
+  `request_status` ENUM('not_requested', 'pending', 'resolved') NOT NULL DEFAULT 'not_requested',
   `user_id` INT NOT NULL,
   `expense_date` DATE NOT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

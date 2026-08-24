@@ -3,7 +3,17 @@
  * Layout Footer & Global Modals
  */
 $user = currentUser();
-$currentShift = getActiveCashRegister($user['id'] ?? 0);
+$currency = getSettings('currency_symbol') ?? 'Rs.';
+$currentShift = getOpenCashRegister();
+$isShiftOwner = $currentShift && (int)$currentShift['user_id'] === (int)($user['id'] ?? 0);
+$currentShiftExpenses = $currentShift ? getCashRegisterExpenseTotal($currentShift) : 0;
+$currentShiftExpectedCash = $currentShift
+    ? (float)$currentShift['opening_cash']
+        + (float)$currentShift['total_cash_sales']
+        + (float)$currentShift['total_card_sales']
+        + (float)$currentShift['total_upi_sales']
+        - $currentShiftExpenses
+    : 0;
 ?>
     </div><!-- End flex-1 container -->
 
@@ -28,24 +38,28 @@ $currentShift = getActiveCashRegister($user['id'] ?? 0);
             </div>
 
             <div class="mt-5">
-                <?php if ($currentShift): ?>
+                <?php if ($currentShift && $isShiftOwner && !hasRole(ROLE_ADMIN)): ?>
                     <!-- Shift Closing Form -->
                     <div class="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl mb-4 space-y-2">
                         <div class="flex justify-between text-xs font-semibold text-stone-600">
                             <span>Opening Float:</span>
-                            <span class="font-bold text-stone-900">$<?= number_format($currentShift['opening_cash'], 2) ?></span>
+                            <span class="font-bold text-stone-900"><?= e($currency) ?><?= number_format($currentShift['opening_cash'], 2) ?></span>
                         </div>
                         <div class="flex justify-between text-xs font-semibold text-stone-600">
                             <span>Cash Sales This Shift:</span>
-                            <span class="font-bold text-emerald-700">+$<?= number_format($currentShift['total_cash_sales'], 2) ?></span>
+                            <span class="font-bold text-emerald-700">+<?= e($currency) ?><?= number_format($currentShift['total_cash_sales'], 2) ?></span>
                         </div>
                         <div class="flex justify-between text-xs font-semibold text-stone-600">
                             <span>Card Sales This Shift:</span>
-                            <span class="font-bold text-sky-700">$<?= number_format($currentShift['total_card_sales'], 2) ?></span>
+                            <span class="font-bold text-sky-700"><?= e($currency) ?><?= number_format($currentShift['total_card_sales'], 2) ?></span>
+                        </div>
+                        <div class="flex justify-between text-xs font-semibold text-stone-600">
+                            <span>Expenses This Shift:</span>
+                            <span class="font-bold text-rose-600">-<?= e($currency) ?><?= number_format($currentShiftExpenses, 2) ?></span>
                         </div>
                         <div class="border-t border-amber-200 pt-2 flex justify-between text-sm font-black text-stone-900">
                             <span>Expected Cash in Drawer:</span>
-                            <span class="text-amber-900">$<?= number_format($currentShift['opening_cash'] + $currentShift['total_cash_sales'], 2) ?></span>
+                                <span class="text-amber-900"><?= e($currency) ?><?= number_format($currentShiftExpectedCash, 2) ?></span>
                         </div>
                     </div>
 
@@ -64,7 +78,23 @@ $currentShift = getActiveCashRegister($user['id'] ?? 0);
                         </div>
                     </form>
 
-                <?php else: ?>
+                <?php elseif ($currentShift && hasRole(ROLE_ADMIN)): ?>
+                    <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-stone-600">
+                        <p class="font-bold text-stone-800 mb-1"><i class="fa-solid fa-circle-info text-amber-700 mr-1"></i> Waiting for Staff Confirmation</p>
+                        The register is open. The first staff member must confirm it before sales can begin.
+                    </div>
+                <?php elseif ($currentShift && !hasRole(ROLE_ADMIN)): ?>
+                    <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-stone-600">
+                        <p class="font-bold text-stone-800 mb-1"><i class="fa-solid fa-circle-info text-amber-700 mr-1"></i> Shift Ready for Confirmation</p>
+                        <?= e($currentShift['cashier_name']) ?> opened the register. Confirm this shift to begin processing sales.
+                    </div>
+                    <form id="claim-shift-form" onsubmit="handleClaimShift(event)" class="space-y-4">
+                        <div class="flex gap-2 pt-2">
+                            <button type="button" onclick="closeModal('shift-register-modal')" class="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold rounded-xl text-xs transition">Cancel</button>
+                            <button type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition">Confirm & Start Shift</button>
+                        </div>
+                    </form>
+                <?php elseif (!$currentShift && hasRole(ROLE_ADMIN)): ?>
                     <!-- Shift Opening Form -->
                     <form id="open-shift-form" onsubmit="handleOpenShift(event)" class="space-y-4">
                         <div class="p-3.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs text-stone-600">
@@ -84,6 +114,11 @@ $currentShift = getActiveCashRegister($user['id'] ?? 0);
                             <button type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition">Open Register Shift</button>
                         </div>
                     </form>
+                <?php else: ?>
+                    <div class="p-3.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs text-stone-600">
+                        <p class="font-bold text-stone-800 mb-1"><i class="fa-solid fa-lock text-stone-500 mr-1"></i> Shift Unavailable</p>
+                        An administrator must open a shift before sales can begin.
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -129,6 +164,20 @@ $currentShift = getActiveCashRegister($user['id'] ?? 0);
         }
       }
 
+            async function handleClaimShift(e) {
+                e.preventDefault();
+                const fd = new FormData();
+                fd.append('action', 'claim_shift');
+
+                const res = await fetch('<?= BASE_URL ?>/api/drawer_action.php', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    Toast.error(data.message || 'Error confirming shift');
+                }
+            }
+
       async function handleCloseShift(e) {
         e.preventDefault();
         const cash = document.getElementById('close_cash_input').value;
@@ -144,7 +193,7 @@ $currentShift = getActiveCashRegister($user['id'] ?? 0);
         if (data.success) {
           Swal.fire({
             title: 'Shift Closed!',
-            html: `Counted: $${parseFloat(data.summary.counted).toFixed(2)}<br>Expected: $${parseFloat(data.summary.expected).toFixed(2)}<br>Difference: <b>$${parseFloat(data.summary.difference).toFixed(2)}</b>`,
+            html: `Expenses: <span style="color:#e11d48">-${<?= json_encode($currency) ?>}${parseFloat(data.summary.expenses).toFixed(2)}</span><br>Counted: ${<?= json_encode($currency) ?>}${parseFloat(data.summary.counted).toFixed(2)}<br>Expected: ${<?= json_encode($currency) ?>}${parseFloat(data.summary.expected).toFixed(2)}<br>Difference: <b>${<?= json_encode($currency) ?>}${parseFloat(data.summary.difference).toFixed(2)}</b>`,
             icon: 'info',
             confirmButtonColor: '#8b5a2b'
           }).then(() => window.location.reload());

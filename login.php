@@ -31,6 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user = db()->fetchOne("SELECT * FROM users WHERE email = :email LIMIT 1", [':email' => $email]);
                 
                 if ($user && $user['status'] === 'active' && password_verify($password, $user['password'])) {
+                    $openShift = getOpenCashRegister();
+                    if (
+                        $user['role'] === ROLE_CASHIER
+                        && $openShift
+                        && $openShift['cashier_role'] === ROLE_CASHIER
+                        && (int)$openShift['user_id'] !== (int)$user['id']
+                    ) {
+                        $error = "Login unavailable. Cashier {$openShift['cashier_name']} has an open shift. That shift must be closed before another cashier can log in.";
+                    } else {
                     $_SESSION['user_id']    = $user['id'];
                     $_SESSION['user_name']  = $user['name'];
                     $_SESSION['user_email'] = $user['email'];
@@ -45,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         header("Location: " . BASE_URL . "/dashboard.php");
                     }
                     exit;
+                    }
                 } else {
                     $error = 'Invalid email address or password.';
                 }

@@ -18,7 +18,7 @@ if ($export === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename=cafe_sales_report_' . $startDate . '_to_' . $endDate . '.csv');
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Invoice No', 'Date & Time', 'Order Type', 'Table', 'Cashier', 'Customer', 'Payment Method', 'Subtotal', 'Discount', 'Tax', 'Service Charge', 'Grand Total', 'Status']);
+    fputcsv($output, ['Invoice No', 'Date & Time', 'Order Type', 'Table', 'Cashier', 'Customer', 'Payment Method', 'Subtotal', 'Discount', 'Service Charge', 'Grand Total', 'Status']);
 
     $exportOrders = db()->fetchAll(
         "SELECT o.*, t.name as table_name, u.name as cashier_name, c.name as customer_name 
@@ -42,7 +42,6 @@ if ($export === 'csv') {
             strtoupper($row['payment_method']),
             $row['subtotal'],
             $row['discount_amount'],
-            $row['tax_amount'],
             $row['service_charge'],
             $row['grand_total'],
             strtoupper($row['order_status'])
@@ -58,9 +57,8 @@ $kpi = db()->fetchOne(
         COUNT(id) as total_orders,
         COALESCE(SUM(subtotal), 0) as total_subtotal,
         COALESCE(SUM(discount_amount), 0) as total_discount,
-        COALESCE(SUM(tax_amount), 0) as total_tax,
         COALESCE(SUM(service_charge), 0) as total_service,
-        COALESCE(SUM(grand_total), 0) as total_revenue
+        COALESCE(SUM(subtotal - discount_amount), 0) as net_amount
      FROM orders 
      WHERE DATE(created_at) BETWEEN :s AND :e AND payment_status = 'paid' AND order_status != 'cancelled'",
     [':s' => $startDate, ':e' => $endDate]
@@ -71,7 +69,7 @@ $expenseSummary = db()->fetchOne(
     "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE expense_date BETWEEN :s AND :e",
     [':s' => $startDate, ':e' => $endDate]
 );
-$netProfit = ($kpi['total_revenue'] ?? 0) - ($expenseSummary['total'] ?? 0);
+$netProfit = ($kpi['net_amount'] ?? 0) - ($expenseSummary['total'] ?? 0);
 
 // Payment breakdown
 $paymentBreakdown = db()->fetchAll(
@@ -115,7 +113,7 @@ require_once __DIR__ . '/includes/sidebar.php';
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h2 class="text-2xl font-black tracking-tight text-stone-900">Financial Reports & Analytics</h2>
-                <p class="text-xs text-stone-500">Analyze sales volume, tax receipts, cashier performance, and net margins</p>
+                <p class="text-xs text-stone-500">Analyze sales volume, cashier performance, and net margins</p>
             </div>
             <a href="reports.php?start_date=<?= e($startDate) ?>&end_date=<?= e($endDate) ?>&export=csv" class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-2xl text-xs shadow-md transition">
                 <i class="fa-solid fa-file-csv text-base"></i> Export to CSV / Excel
@@ -140,15 +138,15 @@ require_once __DIR__ . '/includes/sidebar.php';
         <!-- 4 KPI Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="card-cafe p-5">
-                <span class="text-xs font-bold uppercase tracking-wider text-stone-400">Total Gross Revenue</span>
-                <h3 class="text-2xl font-black text-amber-900 mt-1"><?= $currency ?><?= number_format($kpi['total_revenue'], 2) ?></h3>
+                <span class="text-xs font-bold uppercase tracking-wider text-stone-400">Net Amount</span>
+                <h3 class="text-2xl font-black text-amber-900 mt-1"><?= $currency ?><?= number_format($kpi['net_amount'], 2) ?></h3>
                 <span class="text-xs text-stone-500 mt-2 block"><?= (int)$kpi['total_orders'] ?> Paid Orders</span>
             </div>
 
             <div class="card-cafe p-5">
-                <span class="text-xs font-bold uppercase tracking-wider text-stone-400">Tax Collected</span>
-                <h3 class="text-2xl font-black text-stone-900 mt-1"><?= $currency ?><?= number_format($kpi['total_tax'], 2) ?></h3>
-                <span class="text-xs text-stone-500 mt-2 block">Service: <?= $currency ?><?= number_format($kpi['total_service'], 2) ?></span>
+                <span class="text-xs font-bold uppercase tracking-wider text-stone-400">Total Orders</span>
+                <h3 class="text-2xl font-black text-stone-900 mt-1"><?= (int)$kpi['total_orders'] ?></h3>
+                <span class="text-xs text-stone-500 mt-2 block">Paid orders in selected range</span>
             </div>
 
             <div class="card-cafe p-5">

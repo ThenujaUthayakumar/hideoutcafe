@@ -23,10 +23,10 @@ $page = basename($_SERVER['PHP_SELF'], '.php');
                     <span>POS Terminal</span>
                 </a>
 
-                <a href="<?= BASE_URL ?>/kds.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'kds' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
+                <!-- <a href="<?= BASE_URL ?>/kds.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'kds' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-kitchen-set text-sm w-5 <?= $page === 'kds' ? 'text-white' : 'text-stone-500' ?>"></i>
                     <span>Kitchen KDS</span>
-                </a>
+                </a> -->
 
                 <a href="<?= BASE_URL ?>/tables.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'tables' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-chair text-sm w-5 <?= $page === 'tables' ? 'text-white' : 'text-stone-500' ?>"></i>
@@ -54,11 +54,11 @@ $page = basename($_SERVER['PHP_SELF'], '.php');
                     <i class="fa-solid fa-tags text-sm w-5 <?= $page === 'categories' ? 'text-white' : 'text-stone-500' ?>"></i>
                     <span>Categories</span>
                 </a>
-
+<!-- 
                 <a href="<?= BASE_URL ?>/modifiers.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'modifiers' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-wand-magic-sparkles text-sm w-5 <?= $page === 'modifiers' ? 'text-white' : 'text-stone-500' ?>"></i>
                     <span>Modifiers & Add-ons</span>
-                </a>
+                </a> -->
             </div>
         </div>
         <?php endif; ?>
@@ -77,15 +77,19 @@ $page = basename($_SERVER['PHP_SELF'], '.php');
                     <span>Shift Cash Register</span>
                 </a>
 
-                <?php if (hasRole([ROLE_ADMIN, ROLE_MANAGER])): ?>
                 <a href="<?= BASE_URL ?>/expenses.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'expenses' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-money-bill-transfer text-sm w-5 <?= $page === 'expenses' ? 'text-white' : 'text-stone-500' ?>"></i>
                     <span>Expenses</span>
                 </a>
 
+                <?php if (hasRole([ROLE_ADMIN, ROLE_MANAGER])): ?>
                 <a href="<?= BASE_URL ?>/reports.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'reports' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-chart-line text-sm w-5 <?= $page === 'reports' ? 'text-white' : 'text-stone-500' ?>"></i>
                     <span>Reports & Analytics</span>
+                </a>
+                <a href="<?= BASE_URL ?>/users_report.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'users_report' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
+                    <i class="fa-solid fa-chart-bar text-sm w-5 <?= $page === 'users_report' ? 'text-white' : 'text-stone-500' ?>"></i>
+                    <span>Users Report</span>
                 </a>
                 <?php endif; ?>
             </div>

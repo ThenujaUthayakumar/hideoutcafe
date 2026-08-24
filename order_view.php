@@ -6,8 +6,16 @@ require_once __DIR__ . '/config/functions.php';
 requireAuth();
 
 $orderId = !empty($_GET['id']) ? (int)$_GET['id'] : 0;
+$currentUser = currentUser();
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+$orderOwnerFilter = '';
+$orderParams = [':id' => $orderId];
+
+if (hasRole(ROLE_CASHIER)) {
+    $orderOwnerFilter = ' AND o.user_id = :user_id';
+    $orderParams[':user_id'] = $currentUser['id'];
+}
 
 $order = db()->fetchOne(
     "SELECT o.*, t.name as table_name, u.name as cashier_name, c.name as customer_name, c.phone as customer_phone, c.address as customer_address 
@@ -15,8 +23,8 @@ $order = db()->fetchOne(
      LEFT JOIN tables t ON o.table_id = t.id 
      LEFT JOIN users u ON o.user_id = u.id 
      LEFT JOIN customers c ON o.customer_id = c.id 
-     WHERE o.id = :id",
-    [':id' => $orderId]
+     WHERE o.id = :id$orderOwnerFilter",
+    $orderParams
 );
 
 if (!$order) {
