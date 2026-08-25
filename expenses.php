@@ -22,6 +22,14 @@ try {
     } elseif (strpos($requestStatusColumn['Type'], "'not_requested'") === false) {
         db()->query("ALTER TABLE expenses MODIFY COLUMN request_status ENUM('not_requested', 'pending', 'resolved') NOT NULL DEFAULT 'not_requested'");
     }
+    $attachmentColumn = db()->fetchOne("SHOW COLUMNS FROM expenses LIKE 'attachment_name'");
+    if (!$attachmentColumn) {
+        db()->query("ALTER TABLE expenses ADD COLUMN attachment_name VARCHAR(255) NULL AFTER request_status");
+    }
+    $attachmentMimeColumn = db()->fetchOne("SHOW COLUMNS FROM expenses LIKE 'attachment_mime'");
+    if (!$attachmentMimeColumn) {
+        db()->query("ALTER TABLE expenses ADD COLUMN attachment_mime VARCHAR(100) NULL AFTER attachment_name");
+    }
 } catch (Exception $e) {
     // Existing installations can continue until the schema is upgraded.
 }
@@ -34,11 +42,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount = (float)$_POST['amount'];
         $desc = sanitize($_POST['description']);
         $date = sanitize($_POST['expense_date'] ?? date('Y-m-d'));
-        $requestNote = sanitize($_POST['request_note'] ?? '');
+        $requestNote = '';
+        $attachmentName = null;
+        $attachmentMime = null;
+
+        $hasAttachment = !empty($_FILES['attachment']['name']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK;
+        if ($desc === '' && !$hasAttachment) {
+            setFlash('error', 'Please provide either a Description/Vendor or an image/PDF attachment for this expense.');
+            header("Location: " . BASE_URL . "/expenses.php");
+            exit;
+        }
+        if (!empty($_FILES['attachment']['name']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+            if ($_FILES['attachment']['size'] > 10 * 1024 * 1024) {
+                setFlash('error', 'Attachment must be 10 MB or smaller.');
+                header("Location: " . BASE_URL . "/expenses.php");
+                exit;
+            }
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $attachmentMime = $finfo->file($_FILES['attachment']['tmp_name']);
+            $allowedMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+            if (!in_array($attachmentMime, $allowedMimes, true)) {
+                setFlash('error', 'Only PDF, JPG, PNG, or WEBP attachments are allowed.');
+                header("Location: " . BASE_URL . "/expenses.php");
+                exit;
+            }
+            $extension = strtolower(pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION));
+            $attachmentName = bin2hex(random_bytes(16)) . '.' . $extension;
+            $uploadDir = BASE_PATH . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+            if (!move_uploaded_file($_FILES['attachment']['tmp_name'], $uploadDir . DIRECTORY_SEPARATOR . $attachmentName)) {
+                setFlash('error', 'The attachment could not be saved.');
+                header("Location: " . BASE_URL . "/expenses.php");
+                exit;
+            }
+        }
 
         db()->query(
-            "INSERT INTO expenses (category, amount, description, request_note, request_status, user_id, expense_date) VALUES (:cat, :amt, :desc, :request_note, :request_status, :uid, :date)",
-            [':cat' => $category, ':amt' => $amount, ':desc' => $desc, ':request_note' => $requestNote, ':request_status' => $requestNote !== '' ? 'pending' : 'not_requested', ':uid' => $user['id'], ':date' => $date]
+            "INSERT INTO expenses (category, amount, description, request_note, request_status, attachment_name, attachment_mime, user_id, expense_date) VALUES (:cat, :amt, :desc, :request_note, :request_status, :attachment_name, :attachment_mime, :uid, :date)",
+            [':cat' => $category, ':amt' => $amount, ':desc' => $desc, ':request_note' => $requestNote, ':request_status' => $requestNote !== '' ? 'pending' : 'not_requested', ':attachment_name' => $attachmentName, ':attachment_mime' => $attachmentMime, ':uid' => $user['id'], ':date' => $date]
         );
         setFlash('success', 'Expense recorded successfully.');
         header("Location: " . BASE_URL . "/expenses.php");
@@ -93,6 +134,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $desc = sanitize($_POST['description'] ?? '');
         $date = sanitize($_POST['expense_date'] ?? date('Y-m-d'));
         $requestNote = sanitize($_POST['request_note'] ?? '');
+        $existingExpense = db()->fetchOne("SELECT attachment_name FROM expenses WHERE id = :id", [':id' => $id]);
+        if ($desc === '' && empty($existingExpense['attachment_name'])) {
+            setFlash('error', 'Please keep a description or an attachment on the expense.');
+            header("Location: " . BASE_URL . "/expenses.php");
+            exit;
+        }
         db()->query(
             "UPDATE expenses SET category = :category, amount = :amount, description = :description,
              expense_date = :expense_date, request_note = :request_note, request_status = 'resolved' WHERE id = :id",
@@ -184,12 +231,13 @@ require_once __DIR__ . '/includes/sidebar.php';
                             <th class="p-3.5">Description</th>
                             <th class="p-3.5">Logged By</th>
                             <th class="p-3.5 text-right">Amount</th>
+                            <th class="p-3.5 text-center">Attachment</th>
                             <th class="p-3.5 text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-stone-100">
                         <?php if (empty($expenses)): ?>
-                            <tr><td colspan="6" class="p-8 text-center text-stone-400">No expenses recorded for this month.</td></tr>
+                            <tr><td colspan="7" class="p-8 text-center text-stone-400">No expenses recorded for this month.</td></tr>
                         <?php else: ?>
                             <?php foreach ($expenses as $exp): ?>
                             <tr class="hover:bg-stone-50 transition">
@@ -198,6 +246,17 @@ require_once __DIR__ . '/includes/sidebar.php';
                                 <td class="p-3.5 text-stone-700 font-medium"><?= e($exp['description']) ?></td>
                                 <td class="p-3.5 text-stone-500"><?= e($exp['staff_name']) ?></td>
                                 <td class="p-3.5 text-right font-black text-rose-600 text-sm"><?= $currency ?><?= number_format($exp['amount'], 2) ?></td>
+                                <td class="p-3.5 text-center">
+                                    <?php if (!empty($exp['attachment_name'])): ?>
+                                        <?php if ($isAdmin): ?>
+                                            <a href="<?= BASE_URL ?>/expense_attachment.php?id=<?= (int)$exp['id'] ?>" target="_blank" class="text-emerald-700 font-bold hover:underline" title="View attachment"><i class="fa-solid fa-paperclip mr-1"></i>View</a>
+                                        <?php else: ?>
+                                            <span class="text-emerald-700 font-bold"><i class="fa-solid fa-check mr-1"></i>Attached</span>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="text-stone-400">Not required</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="p-3.5 text-center">
                                     <?php if (!empty($exp['request_note'])): ?>
                                         <span class="block text-[10px] <?= $exp['request_status'] === 'resolved' ? 'text-emerald-700' : 'text-amber-700' ?> mb-1" title="Request note"><i class="fa-solid fa-note-sticky mr-1"></i><?= e($exp['request_note']) ?></span>
@@ -249,7 +308,7 @@ require_once __DIR__ . '/includes/sidebar.php';
             <h3 class="font-extrabold text-stone-900 text-base">Record Cafe Expense</h3>
             <button onclick="closeModal('expense-form-modal')" class="text-stone-400 hover:text-stone-600 p-1"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <form method="POST" action="expenses.php" class="py-4 space-y-3">
+        <form method="POST" action="expenses.php" enctype="multipart/form-data" class="py-4 space-y-3">
             <input type="hidden" name="action" value="save_expense">
 
             <div>
@@ -265,7 +324,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                 </select>
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Amount ($) *</label>
+                <label class="block text-xs font-bold text-stone-700 mb-1">Amount (<?= e($currency) ?>) *</label>
                 <input type="number" step="0.01" min="0.01" name="amount" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-base font-bold text-rose-600">
             </div>
             <div>
@@ -273,8 +332,13 @@ require_once __DIR__ . '/includes/sidebar.php';
                 <input type="date" name="expense_date" value="<?= date('Y-m-d') ?>" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Description / Vendor *</label>
-                <textarea name="description" rows="2" required placeholder="e.g. Purchased 10 Gallons Whole Milk from Farm Direct" class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></textarea>
+                <label class="block text-xs font-bold text-stone-700 mb-1">Description / Vendor</label>
+                <textarea name="description" rows="2" placeholder="e.g. Purchased 10 Gallons Whole Milk from Farm Direct" class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"></textarea>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-stone-700 mb-1">Receipt / Invoice Attachment</label>
+                <input type="file" name="attachment" accept="application/pdf,image/jpeg,image/png,image/webp" class="w-full text-xs">
+                <p class="text-[10px] text-stone-500 mt-1">Add a description/vendor or an attachment. PDF, JPG, PNG, or WEBP up to 10 MB.</p>
             </div>
 
             <div class="pt-2 flex gap-2">

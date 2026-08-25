@@ -20,6 +20,7 @@ if (empty($data) || empty($data['items'])) {
 }
 
 try {
+    db()->query("ALTER TABLE customers MODIFY COLUMN loyalty_points DECIMAL(10,2) NOT NULL DEFAULT 0.00");
     $db = db();
     $db->beginTransaction();
 
@@ -131,9 +132,7 @@ try {
 
     // Award Loyalty Points to customer
     if ($customerId && $customerId > 1 && getSettings('enable_loyalty') == '1') {
-        $pointsRate = (float)(getSettings('points_per_dollar') ?? 1);
-        $pointsEarned = (int)floor($grandTotal * $pointsRate / 100); // 1 pt per 100 LKR
-        if ($pointsEarned < 1) $pointsEarned = 1;
+        $pointsEarned = round($grandTotal / 1000, 2);
         $db->query(
             "UPDATE customers SET loyalty_points = loyalty_points + :pts, total_spent = total_spent + :spent WHERE id = :cid",
             [':pts' => $pointsEarned, ':spent' => $grandTotal, ':cid' => $customerId]

@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $phone = sanitize($_POST['phone']);
         $email = sanitize($_POST['email'] ?? '');
         $address = sanitize($_POST['address'] ?? '');
-        $points = (int)($_POST['loyalty_points'] ?? 0);
+        $points = max(0, (float)($_POST['loyalty_points'] ?? 0));
         $notes = sanitize($_POST['notes'] ?? '');
 
         if ($cid) {
@@ -125,7 +125,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                                 <td class="p-3.5 text-stone-400"><?= e($c['email'] ?? '-') ?></td>
                                 <td class="p-3.5 text-center font-bold text-stone-200"><?= (int)$c['order_count'] ?></td>
                                 <td class="p-3.5 text-right">
-                                    <span class="px-2.5 py-1 rounded-xl bg-red-950 text-red-400 border border-red-800 font-black text-xs"><?= (int)$c['loyalty_points'] ?> pts</span>
+                                    <span class="px-2.5 py-1 rounded-xl bg-red-950 text-red-400 border border-red-800 font-black text-xs"><?= number_format((float)$c['loyalty_points'], 2) ?> pts</span>
                                 </td>
                                 <td class="p-3.5 text-right font-black text-white text-sm"><?= $currency ?><?= number_format($c['total_spent'], 2) ?></td>
                                 <td class="p-3.5 text-center">

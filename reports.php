@@ -69,6 +69,13 @@ $expenseSummary = db()->fetchOne(
     "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE expense_date BETWEEN :s AND :e",
     [':s' => $startDate, ':e' => $endDate]
 );
+$openingFloatSummary = db()->fetchOne(
+    "SELECT COALESCE(SUM(opening_cash), 0) as total
+     FROM cash_registers
+     WHERE opening_time >= CONCAT(:s, ' 00:00:00')
+       AND opening_time < DATE_ADD(CONCAT(:e, ' 00:00:00'), INTERVAL 1 DAY)",
+    [':s' => $startDate, ':e' => $endDate]
+);
 $netProfit = ($kpi['net_amount'] ?? 0) - ($expenseSummary['total'] ?? 0);
 
 // Payment breakdown
@@ -135,8 +142,14 @@ require_once __DIR__ . '/includes/sidebar.php';
             </form>
         </div>
 
-        <!-- 4 KPI Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div class="card-cafe p-5">
+                <span class="text-xs font-bold uppercase tracking-wider text-stone-400">Opening Float</span>
+                <h3 class="text-2xl font-black text-sky-800 mt-1"><?= $currency ?><?= number_format($openingFloatSummary['total'] ?? 0, 2) ?></h3>
+                <span class="text-xs text-stone-500 mt-2 block">Shifts opened in selected range</span>
+            </div>
+
             <div class="card-cafe p-5">
                 <span class="text-xs font-bold uppercase tracking-wider text-stone-400">Net Amount</span>
                 <h3 class="text-2xl font-black text-amber-900 mt-1"><?= $currency ?><?= number_format($kpi['net_amount'], 2) ?></h3>

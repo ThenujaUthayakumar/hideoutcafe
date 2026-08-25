@@ -15,12 +15,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireRole([ROLE_ADMIN, ROLE_MANAGER]);
     $action = $_POST['action'] ?? '';
 
+    if ($action === 'refund_order') {
+        if (!hasRole(ROLE_ADMIN)) {
+            setFlash('error', 'Only Admin can refund orders.');
+            header("Location: " . BASE_URL . "/orders.php");
+            exit;
+        }
+        $orderId = (int)$_POST['order_id'];
+        $reason = sanitize($_POST['refund_reason'] ?? 'Refunded by manager');
+        $db = db();
+
+        try {
+            $db->beginTransaction();
+            $order = $db->fetchOne("SELECT * FROM orders WHERE id = :id FOR UPDATE", [':id' => $orderId]);
+            if (!$order) throw new Exception('Order not found.');
+            if ($order['payment_status'] === 'refunded' || $order['order_status'] === 'cancelled') {
+                throw new Exception('This order has already been cancelled or refunded.');
+            }
+
+            $items = $db->fetchAll("SELECT * FROM order_items WHERE order_id = :id", [':id' => $orderId]);
+            foreach ($items as $item) {
+                $db->query("UPDATE products SET stock_quantity = stock_quantity + :qty WHERE id = :pid AND track_stock = 1", [':qty' => $item['quantity'], ':pid' => $item['product_id']]);
+            }
+
+            if (!empty($order['customer_id']) && (int)$order['customer_id'] > 1 && getSettings('enable_loyalty') == '1') {
+                $points = round((float)$order['grand_total'] / 1000, 2);
+                if ($points > 0) {
+                    $db->query("UPDATE customers SET loyalty_points = GREATEST(0, loyalty_points - :points), total_spent = GREATEST(0, total_spent - :spent) WHERE id = :customer_id", [':points' => $points, ':spent' => $order['grand_total'], ':customer_id' => $order['customer_id']]);
+                }
+            }
+
+            if (!empty($order['table_id'])) {
+                $db->query("UPDATE tables SET status = 'available', current_order_id = NULL WHERE id = :table_id", [':table_id' => $order['table_id']]);
+            }
+
+            $db->query("UPDATE orders SET payment_status = 'refunded', order_status = 'cancelled', notes = CONCAT(COALESCE(notes, ''), ' [Refunded: ', :reason, ']') WHERE id = :id", [':reason' => $reason, ':id' => $orderId]);
+
+            $shift = getOpenCashRegister();
+            if ($shift && (int)$shift['user_id'] === (int)$order['user_id'] && strtotime($order['created_at']) >= strtotime($shift['opening_time'])) {
+                $column = $order['payment_method'] === 'card' ? 'total_card_sales' : ($order['payment_method'] === 'upi' ? 'total_upi_sales' : 'total_cash_sales');
+                $db->query("UPDATE cash_registers SET $column = GREATEST(0, $column - :amount) WHERE id = :shift_id", [':amount' => $order['grand_total'], ':shift_id' => $shift['id']]);
+            }
+
+            $db->commit();
+            setFlash('success', "Order #{$order['invoice_no']} refunded successfully and stock restored.");
+        } catch (Exception $e) {
+            if ($db->getConnection()->inTransaction()) $db->rollBack();
+            setFlash('error', $e->getMessage());
+        }
+        header("Location: " . BASE_URL . "/orders.php");
+        exit;
+    }
+
     if ($action === 'cancel_order') {
         $orderId = (int)$_POST['order_id'];
         $reason = sanitize($_POST['cancel_reason'] ?? 'Voided by manager');
 
         $order = db()->fetchOne("SELECT * FROM orders WHERE id = :id", [':id' => $orderId]);
         if ($order) {
+            if ($order['payment_status'] === 'paid' && !hasRole(ROLE_ADMIN)) {
+                setFlash('error', 'Only Admin can void or refund a paid order.');
+                header("Location: " . BASE_URL . "/orders.php");
+                exit;
+            }
             // Restore inventory
             $items = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id", [':id' => $orderId]);
             foreach ($items as $it) {
@@ -101,48 +158,37 @@ if (!empty($search)) {
 $sql .= " ORDER BY o.id DESC LIMIT 100";
 $orders = db()->fetchAll($sql, $params);
 
-// Sales summary before expenses
-$dailySummary = db()->fetchOne(
-    "SELECT 
-        COUNT(id) as total_count,
-        COALESCE(SUM(subtotal), 0) as total_sales,
-        COALESCE(SUM(discount_amount), 0) as total_discount
-     FROM orders 
-      WHERE DATE(created_at) BETWEEN :start_date AND :end_date AND payment_status = 'paid' AND order_status != 'cancelled'"
-    . ($isCashier ? " AND user_id = :user_id" : ($userFilter > 0 ? " AND user_id = :user_filter" : '')),
-    array_merge(
-        [':start_date' => $startDate, ':end_date' => $endDate],
-        $isCashier
-            ? [':user_id' => $currentUser['id']]
-            : ($userFilter > 0 ? [':user_filter' => $userFilter] : [])
-    )
-);
-
-$expenseParams = [':expense_start_date' => $startDate, ':expense_end_date' => $endDate];
-$expenseUserFilter = '';
+// Summary uses the same filters as the orders table.
+$summarySql = "SELECT COUNT(o.id) as total_count,
+                      COALESCE(SUM(o.subtotal), 0) as total_sales,
+                      COALESCE(SUM(o.discount_amount), 0) as total_discount
+               FROM orders o
+               LEFT JOIN customers c ON o.customer_id = c.id
+               WHERE DATE(o.created_at) BETWEEN :summary_start_date AND :summary_end_date
+                 AND o.payment_status = 'paid' AND o.order_status != 'cancelled'";
+$summaryParams = [':summary_start_date' => $startDate, ':summary_end_date' => $endDate];
 if ($isCashier) {
-    $expenseUserFilter = " AND user_id = :expense_user_id";
-    $expenseParams[':expense_user_id'] = $currentUser['id'];
+    $summarySql .= " AND o.user_id = :summary_user_id";
+    $summaryParams[':summary_user_id'] = $currentUser['id'];
 } elseif ($userFilter > 0) {
-    $expenseUserFilter = " AND user_id = :expense_user_id";
-    $expenseParams[':expense_user_id'] = $userFilter;
+    $summarySql .= " AND o.user_id = :summary_user_filter";
+    $summaryParams[':summary_user_filter'] = $userFilter;
 }
+if ($typeFilter !== 'all') {
+    $summarySql .= " AND o.order_type = :summary_type";
+    $summaryParams[':summary_type'] = $typeFilter;
+}
+if ($payFilter !== 'all') {
+    $summarySql .= " AND o.payment_method = :summary_payment";
+    $summaryParams[':summary_payment'] = $payFilter;
+}
+if (!empty($search)) {
+    $summarySql .= " AND (o.invoice_no LIKE :summary_search OR c.name LIKE :summary_search OR c.phone LIKE :summary_search)";
+    $summaryParams[':summary_search'] = "%$search%";
+}
+$dailySummary = db()->fetchOne($summarySql, $summaryParams);
 
-$expenseSummary = db()->fetchOne(
-    "SELECT COALESCE(SUM(amount), 0) as total
-     FROM expenses
-     WHERE expense_date BETWEEN :expense_start_date AND :expense_end_date" . $expenseUserFilter,
-    $expenseParams
-);
-$currentShift = getOpenCashRegister();
-$shiftSales = $currentShift ? getCashRegisterSalesSummary($currentShift) : [];
-$shiftExpenses = $currentShift ? getCashRegisterExpenseTotal($currentShift) : 0;
-$openingFloat = $currentShift ? (float)$currentShift['opening_cash'] : 0;
-$netAmount = $currentShift
-    ? $openingFloat
-        + (float)($shiftSales['cash_sales'] ?? 0)
-        - $shiftExpenses
-    : 0;
+$netAmount = (float)($dailySummary['total_sales'] ?? 0) - (float)($dailySummary['total_discount'] ?? 0);
 
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';
@@ -218,13 +264,9 @@ require_once __DIR__ . '/includes/sidebar.php';
         </div>
 
         <!-- KPI Strip -->
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div class="bg-stone-900 border border-stone-800 p-4 rounded-2xl">
-                <span class="text-[10px] font-bold text-stone-400 uppercase">Opening Float</span>
-                <div class="text-lg font-black text-amber-400 mt-0.5"><?= $currency ?> <?= number_format($openingFloat, 2) ?></div>
-            </div>
-            <div class="bg-stone-900 border border-stone-800 p-4 rounded-2xl">
-                <span class="text-[10px] font-bold text-stone-400 uppercase">Filtered Sales</span>
+                <span class="text-[10px] font-bold text-stone-400 uppercase">Total Sales</span>
                 <div class="text-lg font-black text-red-400 mt-0.5"><?= $currency ?> <?= number_format($dailySummary['total_sales'] ?? 0, 2) ?></div>
             </div>
             <div class="bg-stone-900 border border-stone-800 p-4 rounded-2xl">
@@ -299,7 +341,12 @@ require_once __DIR__ . '/includes/sidebar.php';
                                         <a href="<?= BASE_URL ?>/print_receipt.php?id=<?= $o['id'] ?>" target="_blank" class="p-1.5 hover:bg-stone-800 rounded-lg text-red-400 transition" title="Reprint Thermal Slip">
                                             <i class="fa-solid fa-print"></i>
                                         </a>
-                                        <?php if ($o['order_status'] !== 'cancelled' && hasRole([ROLE_ADMIN, ROLE_MANAGER])): ?>
+                                        <?php if ($o['payment_status'] === 'paid' && $o['order_status'] !== 'cancelled' && hasRole(ROLE_ADMIN)): ?>
+                                            <button onclick="promptRefundOrder(<?= $o['id'] ?>, '<?= addslashes($o['invoice_no']) ?>', '<?= number_format($o['grand_total'], 2, '.', '') ?>')" class="p-1.5 hover:bg-amber-950/60 text-amber-400 rounded-lg transition" title="Refund Order">
+                                                <i class="fa-solid fa-money-bill-transfer"></i>
+                                            </button>
+                                        <?php endif; ?>
+                                        <?php if ($o['order_status'] !== 'cancelled' && hasRole([ROLE_ADMIN, ROLE_MANAGER]) && ($o['payment_status'] !== 'paid' || hasRole(ROLE_ADMIN))): ?>
                                             <button onclick="promptVoidOrder(<?= $o['id'] ?>, '<?= addslashes($o['invoice_no']) ?>')" class="p-1.5 hover:bg-rose-950/60 text-rose-400 rounded-lg transition" title="Void / Cancel">
                                                 <i class="fa-solid fa-ban"></i>
                                             </button>
@@ -323,16 +370,22 @@ require_once __DIR__ . '/includes/sidebar.php';
     <input type="hidden" name="cancel_reason" id="void_cancel_reason">
 </form>
 
+<form id="refund-order-form" method="POST" action="orders.php" class="hidden">
+    <input type="hidden" name="action" value="refund_order">
+    <input type="hidden" name="order_id" id="refund_order_id">
+    <input type="hidden" name="refund_reason" id="refund_reason">
+</form>
+
 <script>
 async function promptVoidOrder(id, inv) {
   const { value: reason } = await Swal.fire({
     title: `Void Order #${inv}?`,
     input: 'text',
-    inputLabel: 'Reason for Cancellation / Refund',
+    inputLabel: 'Reason for cancellation',
     inputPlaceholder: 'e.g. Wrong items entered / Customer request',
     showCancelButton: true,
     confirmButtonColor: '#dc2626',
-    confirmButtonText: 'Yes, Cancel & Refund'
+    confirmButtonText: 'Yes, Cancel Order'
   });
 
   if (reason) {
@@ -340,6 +393,26 @@ async function promptVoidOrder(id, inv) {
     document.getElementById('void_cancel_reason').value = reason;
     document.getElementById('void-order-form').submit();
   }
+}
+
+async function promptRefundOrder(id, inv, amount) {
+    const { value: reason } = await Swal.fire({
+        title: `Refund Order #${inv}?`,
+        html: `Refund amount: <b><?= e($currency) ?> ${amount}</b>`,
+        input: 'text',
+        inputLabel: 'Reason for refund',
+        inputPlaceholder: 'e.g. Customer request / Incorrect item',
+        showCancelButton: true,
+        confirmButtonColor: '#d97706',
+        confirmButtonText: 'Refund Order',
+        inputValidator: value => !value ? 'A refund reason is required.' : undefined
+    });
+
+    if (reason) {
+        document.getElementById('refund_order_id').value = id;
+        document.getElementById('refund_reason').value = reason;
+        document.getElementById('refund-order-form').submit();
+    }
 }
 </script>
 
