@@ -215,8 +215,9 @@ function getCashRegisterSalesSummary(array $shift): array {
     try {
         return db()->fetchOne(
             "SELECT
-                COALESCE(SUM(subtotal), 0) as subtotal,
-                COALESCE(SUM(discount_amount), 0) as discount_amount,
+                COALESCE(SUM(subtotal), 0) as total_sales,
+                COALESCE(SUM(discount_amount), 0) as total_discount,
+                COALESCE(SUM(subtotal - discount_amount), 0) as net_sales,
                 COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN grand_total ELSE 0 END), 0) as cash_sales,
                 COALESCE(SUM(CASE WHEN payment_method = 'card' THEN grand_total ELSE 0 END), 0) as card_sales
              FROM orders

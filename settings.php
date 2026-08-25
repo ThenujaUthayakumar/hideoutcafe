@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'receipt_header'     => sanitize($_POST['receipt_header'] ?? ''),
         'receipt_footer'     => sanitize($_POST['receipt_footer'] ?? ''),
         'enable_loyalty'     => isset($_POST['enable_loyalty']) ? '1' : '0',
-        'points_per_dollar'  => (int)($_POST['points_per_dollar'] ?? 1)
+        'points_per_dollar'  => 1
     ];
 
     foreach ($settingsToSave as $k => $v) {
@@ -142,8 +142,8 @@ require_once __DIR__ . '/includes/sidebar.php';
                         </label>
                     </div>
                     <div>
-                        <label class="block font-bold text-stone-300 mb-1">Points Earned per $1.00 spent</label>
-                        <input type="number" name="points_per_dollar" value="<?= e($settings['points_per_dollar'] ?? '1') ?>" min="1" class="w-full px-3.5 py-2.5 rounded-xl font-bold">
+                            <label class="block font-bold text-stone-300 mb-1">Points Earned per <?= e($settings['currency_symbol'] ?? 'Rs.') ?>1,000 spent</label>
+                            <input type="number" name="points_per_dollar" value="1" min="1" readonly class="w-full px-3.5 py-2.5 rounded-xl font-bold bg-stone-100">
                     </div>
                 </div>
             </div>

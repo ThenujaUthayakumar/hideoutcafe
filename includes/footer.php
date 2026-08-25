@@ -7,12 +7,11 @@ $currency = getSettings('currency_symbol') ?? 'Rs.';
 $currentShift = getOpenCashRegister();
 $isShiftOwner = $currentShift && (int)$currentShift['user_id'] === (int)($user['id'] ?? 0);
 $currentShiftExpenses = $currentShift ? getCashRegisterExpenseTotal($currentShift) : 0;
+$currentShiftSales = $currentShift ? getCashRegisterSalesSummary($currentShift) : [];
 $currentShiftExpectedCash = $currentShift
     ? (float)$currentShift['opening_cash']
-        + (float)$currentShift['total_cash_sales']
-        + (float)$currentShift['total_card_sales']
-        + (float)$currentShift['total_upi_sales']
-        - $currentShiftExpenses
+        + (float)($currentShiftSales['total_sales'] ?? 0)
+        - (float)($currentShiftSales['total_discount'] ?? 0)
     : 0;
 ?>
     </div><!-- End flex-1 container -->

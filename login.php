@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In | <?= e($settings['cafe_name'] ?? 'The Hide Out Cafe') ?></title>
-<link rel="icon" type="image/x-icon" href="<?= BASE_URL ?>/assets/img/hideout.ico">
+    <link rel="icon" type="image/x-icon" href="assets/img/hideout.ico?v=2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">

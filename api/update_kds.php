@@ -12,15 +12,30 @@ if (!isLoggedIn()) {
 
 $action = $_REQUEST['action'] ?? 'fetch';
 
+$jsonInput = json_decode(file_get_contents('php://input'), true);
+if (is_array($jsonInput)) {
+    $_POST = array_merge($_POST, $jsonInput);
+    $action = $jsonInput['action'] ?? $action;
+}
+
 if ($action === 'fetch') {
     // Fetch all active orders (pending, preparing, ready)
+    $currentUser = currentUser();
+    $ownerFilter = '';
+    $ownerParams = [];
+    if (!hasRole(ROLE_ADMIN)) {
+        $ownerFilter = ' AND o.user_id = :kds_user_id';
+        $ownerParams[':kds_user_id'] = $currentUser['id'];
+    }
     $orders = db()->fetchAll(
         "SELECT o.*, t.name as table_name, u.name as cashier_name 
          FROM orders o 
          LEFT JOIN tables t ON o.table_id = t.id 
          LEFT JOIN users u ON o.user_id = u.id 
-         WHERE o.order_status IN ('pending', 'preparing', 'ready') 
-         ORDER BY o.id ASC"
+         WHERE o.order_status IN ('pending', 'preparing', 'ready')
+         $ownerFilter
+         ORDER BY o.id ASC",
+        $ownerParams
     );
 
     $orderIds = array_column($orders, 'id');
@@ -55,7 +70,17 @@ if ($action === 'update_status') {
     }
 
     try {
-        db()->query("UPDATE orders SET order_status = :status WHERE id = :id", [':status' => $status, ':id' => $orderId]);
+        $currentUser = currentUser();
+        $ownerFilter = hasRole(ROLE_ADMIN) ? '' : ' AND user_id = :user_id';
+        $updateParams = [':status' => $status, ':id' => $orderId];
+        if (!hasRole(ROLE_ADMIN)) {
+            $updateParams[':user_id'] = $currentUser['id'];
+        }
+        $ownedOrder = db()->fetchOne("SELECT id FROM orders WHERE id = :id$ownerFilter", [':id' => $orderId] + ($ownerFilter ? [':user_id' => $currentUser['id']] : []));
+        if (!$ownedOrder) {
+            jsonResponse(['success' => false, 'message' => 'Order not found or access denied'], 403);
+        }
+        db()->query("UPDATE orders SET order_status = :status WHERE id = :id$ownerFilter", $updateParams);
         
         // If order completed or cancelled, free associated table
         if (in_array($status, [STATUS_COMPLETED, STATUS_CANCELLED])) {

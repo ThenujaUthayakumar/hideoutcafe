@@ -21,8 +21,8 @@ $shiftExpenses = $currentShift ? getCashRegisterExpenseTotal($currentShift) : 0;
 
 $shiftHeaderAmount = $currentShift
     ? (float)$currentShift['opening_cash']
-        + (float)($shiftSales['cash_sales'] ?? 0)
-        - (float)$shiftExpenses
+        + (float)($shiftSales['total_sales'] ?? 0)
+        - (float)($shiftSales['total_discount'] ?? 0)
     : 0;
 ?>
 <!DOCTYPE html>
@@ -31,7 +31,7 @@ $shiftHeaderAmount = $currentShift
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($title ?? APP_NAME) ?> | <?= e($settings['cafe_name'] ?? APP_NAME) ?></title>
-<link rel="icon" type="image/x-icon" href="<?= BASE_URL ?>/assets/img/hideout.ico">
+    <link rel="icon" type="image/x-icon" href="assets/img/hideout.ico?v=2">
     <!-- Google Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

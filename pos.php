@@ -145,8 +145,8 @@ require_once __DIR__ . '/includes/header.php';
                     <div class="flex items-center gap-2 overflow-hidden">
                         <i class="fa-solid fa-user-circle text-red-500 text-base flex-shrink-0"></i>
                         <div class="truncate">
-                            <span id="pos-customer-name" class="block font-bold text-xs text-white truncate">Walk-in Customer</span>
-                            <span id="pos-customer-points" class="block text-[10px] text-red-400 font-semibold">0 pts</span>
+                            <span id="pos-customer-name" class="block font-bold text-xs text-white truncate">No Customer Selected</span>
+                            <span id="pos-customer-points" class="block text-[10px] text-stone-400 font-semibold">Optional</span>
                         </div>
                     </div>
                     <i class="fa-solid fa-chevron-right text-[10px] text-stone-500"></i>
@@ -279,12 +279,12 @@ require_once __DIR__ . '/includes/header.php';
                 <input type="text" id="cust-search-input" oninput="searchCustomers(this.value)" placeholder="Search by name or phone..." class="w-full px-3.5 py-2.5 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white focus:bg-black focus:ring-2 focus:ring-red-600">
                 <div id="cust-search-results" class="space-y-2 max-h-60 overflow-y-auto">
                     <?php foreach ($customers as $c): ?>
-                    <div onclick="PosApp.selectCustomer({ id: <?= $c['id'] ?>, name: '<?= addslashes($c['name']) ?>', phone: '<?= e($c['phone']) ?>', points: <?= (int)$c['loyalty_points'] ?> })" class="flex items-center justify-between p-3 border border-stone-800 rounded-xl hover:border-red-600 hover:bg-stone-800/80 cursor-pointer transition">
+                    <div onclick="PosApp.selectCustomer({ id: <?= $c['id'] ?>, name: '<?= addslashes($c['name']) ?>', phone: '<?= e($c['phone']) ?>', points: <?= (float)$c['loyalty_points'] ?> })" class="flex items-center justify-between p-3 border border-stone-800 rounded-xl hover:border-red-600 hover:bg-stone-800/80 cursor-pointer transition">
                         <div>
                             <h4 class="font-bold text-xs text-white"><?= e($c['name']) ?></h4>
                             <p class="text-[11px] text-stone-400"><?= e($c['phone']) ?></p>
                         </div>
-                        <span class="text-xs font-extrabold text-red-400 bg-red-950/70 border border-red-900 px-2 py-0.5 rounded-lg"><?= (int)$c['loyalty_points'] ?> pts</span>
+                        <span class="text-xs font-extrabold text-red-400 bg-red-950/70 border border-red-900 px-2 py-0.5 rounded-lg"><?= number_format((float)$c['loyalty_points'], 2) ?> pts</span>
                     </div>
                     <?php endforeach; ?>
                 </div>

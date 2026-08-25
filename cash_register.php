@@ -69,11 +69,10 @@ require_once __DIR__ . '/includes/sidebar.php';
                             <?php foreach ($shifts as $s): ?>
                             <?php 
                             $expenseAmount = getCashRegisterExpenseTotal($s);
+                            $shiftSales = getCashRegisterSalesSummary($s);
                             $expectedCash = (float)$s['opening_cash']
-                                + (float)$s['total_cash_sales']
-                                + (float)$s['total_card_sales']
-                                + (float)$s['total_upi_sales']
-                                - $expenseAmount;
+                                + (float)($shiftSales['total_sales'] ?? 0)
+                                - (float)($shiftSales['total_discount'] ?? 0);
                             $diff = (float)($s['difference_amount'] ?? 0);
                             $diffClass = $diff < 0 ? 'text-rose-600 font-black' : ($diff > 0 ? 'text-emerald-700 font-black' : 'text-stone-500');
                             ?>

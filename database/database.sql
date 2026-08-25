@@ -217,7 +217,7 @@ CREATE TABLE `customers` (
   `phone` VARCHAR(25) NOT NULL UNIQUE,
   `email` VARCHAR(100) NULL,
   `address` TEXT NULL,
-  `loyalty_points` INT NOT NULL DEFAULT 0,
+  `loyalty_points` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `total_spent` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `notes` TEXT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -314,6 +314,8 @@ CREATE TABLE `expenses` (
   `description` TEXT NOT NULL,
   `request_note` TEXT NULL,
   `request_status` ENUM('not_requested', 'pending', 'resolved') NOT NULL DEFAULT 'not_requested',
+  `attachment_name` VARCHAR(255) NULL,
+  `attachment_mime` VARCHAR(100) NULL,
   `user_id` INT NOT NULL,
   `expense_date` DATE NOT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
