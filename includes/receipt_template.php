@@ -35,8 +35,14 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
         </div>
         <div class="flex justify-between">
             <span>Order Type:</span>
-            <span class="font-bold uppercase"><?= e(str_replace('_', ' ', $order['order_type'])) ?><?= !empty($order['table_name']) ? ' (' . e($order['table_name']) . ')' : '' ?></span>
+            <span class="font-bold uppercase"><?= e(str_replace('_', ' ', $order['order_type'])) ?></span>
         </div>
+        <?php if (!empty($order['table_name'])): ?>
+        <div class="flex justify-between">
+            <span>Table:</span>
+            <span class="font-bold"><?= e($order['table_name']) ?></span>
+        </div>
+        <?php endif; ?>
     </div>
 
     <div class="receipt-divider"></div>

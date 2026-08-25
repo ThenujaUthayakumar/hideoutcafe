@@ -65,12 +65,11 @@ if ($action === 'close_shift') {
     $closingCash = (float)($_POST['closing_cash'] ?? 0);
     $notes = sanitize($_POST['notes'] ?? '');
 
-    $expenseAmount = getCashRegisterExpenseTotal($activeShift);
-    $expectedCash = $activeShift['opening_cash']
-            + $activeShift['total_cash_sales']
-            + $activeShift['total_card_sales']
-            + $activeShift['total_upi_sales']
-            - $expenseAmount;
+        $shiftSales = getCashRegisterSalesSummary($activeShift);
+        $expenseAmount = getCashRegisterExpenseTotal($activeShift);
+        $expectedCash = (float)$activeShift['opening_cash']
+            + (float)($shiftSales['total_sales'] ?? 0)
+            - (float)($shiftSales['total_discount'] ?? 0);
     $diff = $closingCash - $expectedCash;
 
     db()->query(

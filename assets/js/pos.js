@@ -8,7 +8,7 @@ const PosApp = {
     orderType: 'dine_in',
     tableId: null,
     tableName: 'No Table',
-    customer: { id: 1, name: 'Walk-in Customer', phone: '0000000000', points: 0 },
+    customer: null,
     discountType: 'percentage',
     discountValue: 0,
     currencySymbol: 'Rs.',
@@ -308,7 +308,7 @@ const PosApp = {
   selectCustomer(customer) {
     this.state.customer = customer;
     document.getElementById('pos-customer-name').textContent = customer.name;
-    document.getElementById('pos-customer-points').textContent = `${customer.points || 0} pts`;
+    document.getElementById('pos-customer-points').textContent = `${Number(customer.points || 0).toFixed(2)} pts`;
     closeModal('customer-search-modal');
     Toast.success(`Customer set: ${customer.name}`);
   },
@@ -500,7 +500,7 @@ getCalculations() {
     const payload = {
       order_type: this.state.orderType,
       table_id: this.state.tableId,
-      customer_id: this.state.customer.id,
+      customer_id: this.state.customer ? this.state.customer.id : null,
       payment_method: paymentMethod,
       paid_amount: tendered,
       change_amount: Math.max(0, tendered - calc.grandTotal),
@@ -509,7 +509,7 @@ getCalculations() {
       discount_amount: calc.discount,
       subtotal: calc.subtotal,
       grand_total: calc.grandTotal,
-      order_status: 'completed', // Completed on counter payment
+      order_status: 'pending',
       notes: document.getElementById('pos-order-notes') ? document.getElementById('pos-order-notes').value : '',
       items: this.state.cart.map(i => ({
         product_id: i.productId,
@@ -590,7 +590,7 @@ getCalculations() {
       title: 'Hold / Park Order',
       input: 'text',
       inputLabel: 'Reference / Customer Name',
-      inputValue: this.state.tableName !== 'No Table' ? this.state.tableName : (this.state.customer.name !== 'Walk-in Customer' ? this.state.customer.name : 'Cart #' + Math.floor(Math.random() * 1000)),
+      inputValue: this.state.tableName !== 'No Table' ? this.state.tableName : (this.state.customer ? this.state.customer.name : 'Cart #' + Math.floor(Math.random() * 1000)),
       showCancelButton: true,
       confirmButtonColor: '#dc2626',
       confirmButtonText: 'Hold Order'
@@ -605,8 +605,8 @@ getCalculations() {
         body: JSON.stringify({
           action: 'hold',
           hold_reference: refName,
-          customer_id: this.state.customer.id,
-          customer_name: this.state.customer.name,
+          customer_id: this.state.customer ? this.state.customer.id : null,
+          customer_name: this.state.customer ? this.state.customer.name : 'Walk-in Customer',
           table_id: this.state.tableId,
           order_type: this.state.orderType,
           cart_json: JSON.stringify(this.state.cart),

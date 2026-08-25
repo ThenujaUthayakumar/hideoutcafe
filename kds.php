@@ -8,14 +8,23 @@ requireAuth();
 $title = 'Kitchen Display System';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+$currentUser = currentUser();
+$kdsOwnerFilter = '';
+$kdsParams = [];
+if (!hasRole(ROLE_ADMIN)) {
+    $kdsOwnerFilter = ' AND o.user_id = :kds_user_id';
+    $kdsParams[':kds_user_id'] = $currentUser['id'];
+}
 
 $activeOrders = db()->fetchAll(
     "SELECT o.*, t.name as table_name, u.name as cashier_name 
      FROM orders o 
      LEFT JOIN tables t ON o.table_id = t.id 
      LEFT JOIN users u ON o.user_id = u.id 
-     WHERE o.order_status IN ('pending', 'preparing', 'ready') 
-     ORDER BY o.created_at ASC"
+    WHERE o.order_status IN ('pending', 'preparing', 'ready')
+    $kdsOwnerFilter
+    ORDER BY o.created_at ASC",
+    $kdsParams
 );
 
 $orderIds = array_column($activeOrders, 'id');
@@ -151,7 +160,7 @@ require_once __DIR__ . '/includes/sidebar.php';
       const res = await fetch('<?= BASE_URL ?>/api/update_kds.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId, status: status })
+        body: JSON.stringify({ action: 'update_status', order_id: orderId, status: status })
       });
       const data = await res.json();
       if (data.success) {
