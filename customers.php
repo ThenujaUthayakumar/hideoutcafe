@@ -50,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $query = trim($_GET['q'] ?? '');
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
 $sql = "SELECT c.*, COUNT(o.id) as order_count 
         FROM customers c 
         LEFT JOIN orders o ON c.id = o.customer_id 
@@ -64,6 +66,11 @@ if (!empty($query)) {
 }
 $sql .= " GROUP BY c.id ORDER BY c.id DESC";
 
+$countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($sql) filtered_customers", $params);
+$totalCustomers = (int)($countRow['total'] ?? 0);
+$totalPages = max(1, (int)ceil($totalCustomers / $perPage));
+$page = min($page, $totalPages);
+$sql .= " LIMIT " . (($page - 1) * $perPage) . ", " . $perPage;
 $customers = db()->fetchAll($sql, $params);
 
 require_once __DIR__ . '/includes/header.php';
@@ -91,6 +98,9 @@ require_once __DIR__ . '/includes/sidebar.php';
                     <input type="text" name="q" value="<?= e($query) ?>" placeholder="Search customer by name, phone or email..." class="w-full pl-10 pr-3 py-2.5 rounded-xl">
                 </div>
                 <button type="submit" class="px-5 py-2.5 bg-red-600 text-white font-bold rounded-xl shadow-xs">Search</button>
+                <?php if ($query !== ''): ?>
+                    <a href="<?= BASE_URL ?>/customers.php" class="px-5 py-2.5 bg-stone-800 text-stone-300 font-bold rounded-xl">Clear</a>
+                <?php endif; ?>
             </form>
         </div>
 
@@ -150,6 +160,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </tbody>
                 </table>
             </div>
+            <?= renderPagination($page, $totalCustomers, $perPage, ['q' => $query]) ?>
         </div>
 
     </div>

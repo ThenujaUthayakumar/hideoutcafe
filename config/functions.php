@@ -147,6 +147,42 @@ function formatDate(?string $date, string $format = 'M d, Y h:i A'): string {
     return date($format, strtotime($date));
 }
 
+function paginationUrl(array $params, int $page): string {
+    $params['page'] = $page;
+    return '?' . http_build_query(array_filter($params, static function ($value) {
+        return $value !== '' && $value !== null && $value !== 'all' && $value !== 0;
+    }));
+}
+
+function renderPagination(int|string $page, int $total, int $perPage, array $params = [], bool $dark = false): string {
+    if (is_string($page)) {
+        $page = max(1, (int)($_GET['page'] ?? 1));
+    }
+    $totalPages = max(1, (int)ceil($total / $perPage));
+    if ($totalPages <= 1) return '';
+
+    $page = min(max(1, $page), $totalPages);
+    $buttonClass = $dark
+        ? 'border-stone-700 bg-stone-800 text-stone-300 hover:bg-stone-700'
+        : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50';
+    $activeClass = $dark ? 'border-red-600 bg-red-600 text-white' : 'border-amber-800 bg-amber-800 text-white';
+    $disabledClass = 'pointer-events-none opacity-40';
+    $html = '<nav class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs" aria-label="Pagination">';
+    $first = (($page - 1) * $perPage) + 1;
+    $last = min($page * $perPage, $total);
+    $html .= '<span class="font-semibold ' . ($dark ? 'text-stone-400' : 'text-stone-500') . '">Showing ' . $first . '-' . $last . ' of ' . $total . '</span>';
+    $html .= '<div class="flex items-center gap-1">';
+    $html .= '<a class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 ' . $buttonClass . ' ' . ($page === 1 ? $disabledClass : '') . '" href="' . e(paginationUrl($params, $page - 1)) . '" aria-label="Previous page"><i class="fa-solid fa-chevron-left"></i></a>';
+
+    $start = max(1, min($page - 2, $totalPages - 4));
+    $end = min($totalPages, $start + 4);
+    for ($number = $start; $number <= $end; $number++) {
+        $html .= '<a class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 font-bold ' . ($number === $page ? $activeClass : $buttonClass) . '" href="' . e(paginationUrl($params, $number)) . '">' . $number . '</a>';
+    }
+    $html .= '<a class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 ' . $buttonClass . ' ' . ($page === $totalPages ? $disabledClass : '') . '" href="' . e(paginationUrl($params, $page + 1)) . '" aria-label="Next page"><i class="fa-solid fa-chevron-right"></i></a>';
+    return $html . '</div></nav>';
+}
+
 function generateInvoiceNo(): string {
     $prefix = getSettings('invoice_prefix') ?? 'HOC-';
     $datePart = date('Ymd');
