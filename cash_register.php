@@ -11,21 +11,27 @@ $currency = $settings['currency_symbol'] ?? '$';
 $currentUser = currentUser();
 $shiftWhere = '';
 $shiftParams = [];
+$shiftSearch = trim($_GET['q'] ?? '');
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
 
 if (hasRole(ROLE_CASHIER)) {
     $shiftWhere = ' WHERE cr.user_id = :user_id';
     $shiftParams[':user_id'] = $currentUser['id'];
 }
+$shiftSql = "SELECT cr.*, u.name as cashier_name FROM cash_registers cr JOIN users u ON cr.user_id = u.id" . $shiftWhere;
+if ($shiftSearch !== '') {
+    $shiftSql .= " AND (CAST(cr.id AS CHAR) LIKE :search_id OR u.name LIKE :search_cashier OR cr.status LIKE :search_status)";
+    $shiftParams[':search_id'] = "%$shiftSearch%";
+    $shiftParams[':search_cashier'] = "%$shiftSearch%";
+    $shiftParams[':search_status'] = "%$shiftSearch%";
+}
+$countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($shiftSql) filtered_shifts", $shiftParams);
+$totalShifts = (int)($countRow['total'] ?? 0);
+$totalPages = max(1, (int)ceil($totalShifts / $perPage));
+$page = min($page, $totalPages);
 
-$shifts = db()->fetchAll(
-    "SELECT cr.*, u.name as cashier_name 
-     FROM cash_registers cr 
-     JOIN users u ON cr.user_id = u.id 
-     $shiftWhere
-     ORDER BY cr.id DESC 
-     LIMIT 50",
-    $shiftParams
-);
+$shifts = db()->fetchAll($shiftSql . " ORDER BY cr.id DESC LIMIT " . (($page - 1) * $perPage) . ", " . $perPage, $shiftParams);
 
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';
@@ -42,6 +48,14 @@ require_once __DIR__ . '/includes/sidebar.php';
             <button onclick="openModal('shift-register-modal')" class="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-800 hover:bg-amber-700 text-white font-bold rounded-2xl text-xs shadow-md transition">
                 <i class="fa-solid fa-vault"></i> Open / Close Shift
             </button>
+        </div>
+
+        <div class="card-cafe p-4">
+            <form method="GET" action="cash_register.php" class="flex flex-col sm:flex-row gap-3 text-xs">
+                <input type="text" name="q" value="<?= e($shiftSearch) ?>" placeholder="Search shift number, cashier or status..." class="flex-1 px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl">
+                <button type="submit" class="px-5 py-2 bg-amber-800 text-white font-bold rounded-xl">Search</button>
+                <?php if ($shiftSearch !== ''): ?><a href="<?= BASE_URL ?>/cash_register.php" class="px-5 py-2 bg-stone-200 text-stone-700 font-bold rounded-xl text-center">Clear</a><?php endif; ?>
+            </form>
         </div>
 
         <div class="card-cafe overflow-hidden">
@@ -98,6 +112,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </tbody>
                 </table>
             </div>
+            <?= renderPagination($page, $totalShifts, $perPage, ['q' => $shiftSearch]) ?>
         </div>
 
     </div>

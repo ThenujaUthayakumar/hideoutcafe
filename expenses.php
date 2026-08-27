@@ -173,20 +173,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $monthFilter = $_GET['month'] ?? date('Y-m');
-$expenses = db()->fetchAll(
-    "SELECT e.*, u.name as staff_name 
-     FROM expenses e 
-     JOIN users u ON e.user_id = u.id 
-     WHERE DATE_FORMAT(e.expense_date, '%Y-%m') = :m"
-     . (!$isAdmin ? " AND e.user_id = :user_id" : '') . "
-     ORDER BY e.expense_date DESC, e.id DESC",
-    array_merge(
-        [':m' => $monthFilter],
-        !$isAdmin ? [':user_id' => $user['id']] : []
-    )
-);
-
-$totalExpense = array_sum(array_column($expenses, 'amount'));
+$expenseSearch = trim($_GET['q'] ?? '');
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$expenseSql = "SELECT e.*, u.name as staff_name
+               FROM expenses e
+               JOIN users u ON e.user_id = u.id
+               WHERE DATE_FORMAT(e.expense_date, '%Y-%m') = :m";
+$expenseParams = [':m' => $monthFilter];
+if (!$isAdmin) {
+    $expenseSql .= " AND e.user_id = :user_id";
+    $expenseParams[':user_id'] = $user['id'];
+}
+if ($expenseSearch !== '') {
+    $expenseSql .= " AND (e.category LIKE :search_category OR e.description LIKE :search_description OR u.name LIKE :search_staff)";
+    $expenseParams[':search_category'] = "%$expenseSearch%";
+    $expenseParams[':search_description'] = "%$expenseSearch%";
+    $expenseParams[':search_staff'] = "%$expenseSearch%";
+}
+$expenseTotalRow = db()->fetchOne("SELECT COALESCE(SUM(e.amount), 0) AS total FROM expenses e JOIN users u ON e.user_id = u.id WHERE DATE_FORMAT(e.expense_date, '%Y-%m') = :m" . (!$isAdmin ? " AND e.user_id = :user_id" : '') . ($expenseSearch !== '' ? " AND (e.category LIKE :search_category OR e.description LIKE :search_description OR u.name LIKE :search_staff)" : ''), $expenseParams);
+$totalExpense = (float)($expenseTotalRow['total'] ?? 0);
+$countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($expenseSql) filtered_expenses", $expenseParams);
+$totalExpenses = (int)($countRow['total'] ?? 0);
+$totalPages = max(1, (int)ceil($totalExpenses / $perPage));
+$page = min($page, $totalPages);
+$expenseSql .= " ORDER BY e.expense_date DESC, e.id DESC LIMIT " . (($page - 1) * $perPage) . ", " . $perPage;
+$expenses = db()->fetchAll($expenseSql, $expenseParams);
 
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';
@@ -217,6 +229,11 @@ require_once __DIR__ . '/includes/sidebar.php';
                 <label class="font-bold text-stone-700">Filter Month:</label>
                 <input type="month" name="month" value="<?= e($monthFilter) ?>" class="px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl font-bold">
                 <button type="submit" class="px-4 py-2 bg-stone-800 text-white font-bold rounded-xl shadow-xs">View</button>
+                <input type="text" name="q" value="<?= e($expenseSearch) ?>" placeholder="Search category, description or staff" class="flex-1 min-w-48 px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl">
+                <button type="submit" class="px-4 py-2 bg-amber-800 text-white font-bold rounded-xl shadow-xs">Search</button>
+                <?php if ($expenseSearch !== '' || $monthFilter !== date('Y-m')): ?>
+                    <a href="<?= BASE_URL ?>/expenses.php" class="px-4 py-2 bg-stone-200 text-stone-700 font-bold rounded-xl">Clear</a>
+                <?php endif; ?>
             </form>
         </div>
 
@@ -296,6 +313,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </tbody>
                 </table>
             </div>
+            <?= renderPagination($page, $totalExpenses, $perPage, ['month' => $monthFilter, 'q' => $expenseSearch]) ?>
         </div>
 
     </div>

@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'save_product') {
         $id = !empty($_POST['product_id']) ? (int)$_POST['product_id'] : null;
         $name = sanitize($_POST['name']);
-        $code = sanitize($_POST['code']);
+        $code = sanitize($_POST['code_value'] ?? '');
         $catId = (int)$_POST['category_id'];
         $price = (float)$_POST['price'];
         $cost = (float)$_POST['cost_price'];
@@ -69,6 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $categories = db()->fetchAll("SELECT * FROM categories ORDER BY sort_order ASC, name ASC");
 $catFilter = $_GET['cat'] ?? 'all';
 $search = trim($_GET['q'] ?? '');
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
 
 $sql = "SELECT p.*, c.name as category_name 
         FROM products p 
@@ -80,10 +82,16 @@ if ($catFilter !== 'all') {
     $params[':cat'] = $catFilter;
 }
 if (!empty($search)) {
-    $sql .= " AND (p.name LIKE :q OR p.code LIKE :q)";
-    $params[':q'] = "%$search%";
+    $sql .= " AND (p.name LIKE :product_name OR p.code LIKE :product_code)";
+    $params[':product_name'] = "%$search%";
+    $params[':product_code'] = "%$search%";
 }
 $sql .= " ORDER BY c.sort_order ASC, p.name ASC";
+$countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($sql) filtered_products", $params);
+$totalProducts = (int)($countRow['total'] ?? 0);
+$totalPages = max(1, (int)ceil($totalProducts / $perPage));
+$page = min($page, $totalPages);
+$sql .= " LIMIT " . (($page - 1) * $perPage) . ", " . $perPage;
 $products = db()->fetchAll($sql, $params);
 
 // Fetch Variants
@@ -126,6 +134,9 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </select>
                 </div>
                 <button type="submit" class="px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-md">Filter</button>
+                <?php if ($search !== '' || $catFilter !== 'all'): ?>
+                    <a href="<?= BASE_URL ?>/products.php" class="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold rounded-xl">Clear</a>
+                <?php endif; ?>
             </form>
         </div>
 
@@ -205,6 +216,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </tbody>
                 </table>
             </div>
+            <?= renderPagination($page, $totalProducts, $perPage, ['q' => $search, 'cat' => $catFilter], true) ?>
         </div>
 
     </div>
@@ -228,7 +240,8 @@ require_once __DIR__ . '/includes/sidebar.php';
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-stone-300 mb-1">SKU / Code *</label>
-                    <input type="text" name="code" id="prod_form_code" required class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                    <input type="text" id="prod_form_code" disabled aria-disabled="true" autocomplete="off" class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                    <input type="hidden" name="code_value" id="prod_form_code_value">
                 </div>
             </div>
 
@@ -306,10 +319,13 @@ function addVariantRow(name = '', price = '0.00') {
 }
 
 function openProductModal() {
+    const codeInput = document.getElementById('prod_form_code');
+    const codeValueInput = document.getElementById('prod_form_code_value');
   document.getElementById('product-modal-title').textContent = 'Add New Menu Item';
   document.getElementById('prod_form_id').value = '';
   document.getElementById('prod_form_name').value = '';
-  document.getElementById('prod_form_code').value = 'COF-' + Math.floor(Math.random() * 9000 + 1000);
+    codeInput.value = 'COF-' + Math.floor(Math.random() * 9000 + 1000);
+    codeValueInput.value = codeInput.value;
   document.getElementById('prod_form_price').value = '';
   document.getElementById('prod_form_cost').value = '0.00';
   document.getElementById('prod_form_desc').value = '';
@@ -321,10 +337,13 @@ function openProductModal() {
 }
 
 function editProduct(p, variants) {
+    const codeInput = document.getElementById('prod_form_code');
+    const codeValueInput = document.getElementById('prod_form_code_value');
   document.getElementById('product-modal-title').textContent = 'Edit Product: ' + p.name;
   document.getElementById('prod_form_id').value = p.id;
   document.getElementById('prod_form_name').value = p.name;
-  document.getElementById('prod_form_code').value = p.code;
+    codeInput.value = p.code;
+    codeValueInput.value = p.code;
   document.getElementById('prod_form_cat').value = p.category_id;
   document.getElementById('prod_form_price').value = p.price;
   document.getElementById('prod_form_cost').value = p.cost_price;

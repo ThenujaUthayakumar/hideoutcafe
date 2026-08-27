@@ -117,6 +117,8 @@ $typeFilter = $_GET['type'] ?? 'all';
 $payFilter  = $_GET['payment'] ?? 'all';
 $userFilter = (int)($_GET['user_id'] ?? 0);
 $search     = trim($_GET['q'] ?? '');
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
 
 $users = [];
 if (!$isCashier) {
@@ -151,11 +153,17 @@ if ($payFilter !== 'all') {
     $params[':p'] = $payFilter;
 }
 if (!empty($search)) {
-    $sql .= " AND (o.invoice_no LIKE :q OR c.name LIKE :q OR c.phone LIKE :q)";
-    $params[':q'] = "%$search%";
+    $sql .= " AND (o.invoice_no LIKE :order_invoice OR c.name LIKE :order_customer OR c.phone LIKE :order_phone)";
+    $params[':order_invoice'] = "%$search%";
+    $params[':order_customer'] = "%$search%";
+    $params[':order_phone'] = "%$search%";
 }
 
-$sql .= " ORDER BY o.id DESC LIMIT 100";
+$countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($sql) filtered_orders", $params);
+$totalOrders = (int)($countRow['total'] ?? 0);
+$totalPages = max(1, (int)ceil($totalOrders / $perPage));
+$page = min($page, $totalPages);
+$sql .= " ORDER BY o.id DESC LIMIT " . (($page - 1) * $perPage) . ", " . $perPage;
 $orders = db()->fetchAll($sql, $params);
 
 // Summary uses the same filters as the orders table.
@@ -183,8 +191,10 @@ if ($payFilter !== 'all') {
     $summaryParams[':summary_payment'] = $payFilter;
 }
 if (!empty($search)) {
-    $summarySql .= " AND (o.invoice_no LIKE :summary_search OR c.name LIKE :summary_search OR c.phone LIKE :summary_search)";
-    $summaryParams[':summary_search'] = "%$search%";
+    $summarySql .= " AND (o.invoice_no LIKE :summary_invoice OR c.name LIKE :summary_customer OR c.phone LIKE :summary_phone)";
+    $summaryParams[':summary_invoice'] = "%$search%";
+    $summaryParams[':summary_customer'] = "%$search%";
+    $summaryParams[':summary_phone'] = "%$search%";
 }
 $dailySummary = db()->fetchOne($summarySql, $summaryParams);
 
@@ -259,6 +269,9 @@ require_once __DIR__ . '/includes/sidebar.php';
                     <button type="submit" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-md transition">
                         <i class="fa-solid fa-filter mr-1"></i> Filter
                     </button>
+                    <?php if ($search !== '' || $typeFilter !== 'all' || $payFilter !== 'all' || $userFilter > 0 || $startDate !== date('Y-m-d') || $endDate !== date('Y-m-d')): ?>
+                        <a href="<?= BASE_URL ?>/orders.php" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold rounded-xl text-center transition">Clear</a>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
@@ -359,6 +372,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </tbody>
                 </table>
             </div>
+            <?= renderPagination($page, $totalOrders, $perPage, ['start_date' => $startDate, 'end_date' => $endDate, 'type' => $typeFilter, 'payment' => $payFilter, 'user_id' => $userFilter, 'q' => $search], true) ?>
         </div>
 
     </div>
