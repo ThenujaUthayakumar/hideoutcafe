@@ -147,6 +147,91 @@ function formatDate(?string $date, string $format = 'M d, Y h:i A'): string {
     return date($format, strtotime($date));
 }
 
+function ensureProductDiscountSchema(): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+
+    try {
+        $columns = db()->fetchAll("SHOW COLUMNS FROM products");
+        $existing = array_column($columns, 'Field');
+        $definitions = [
+            'discount_type' => "ENUM('percentage', 'fixed') NOT NULL DEFAULT 'percentage'",
+            'discount_value' => "DECIMAL(10,2) NOT NULL DEFAULT 0.00",
+            'discount_start' => 'DATETIME NULL',
+            'discount_end' => 'DATETIME NULL'
+        ];
+        foreach ($definitions as $column => $definition) {
+            if (!in_array($column, $existing, true)) {
+                db()->query("ALTER TABLE products ADD COLUMN `$column` $definition");
+            }
+        }
+    } catch (Exception $e) {
+        // The schema file remains the source of truth for fresh installations.
+    }
+}
+
+function getActiveProductDiscount(array $product, ?int $timestamp = null): float {
+    $value = max(0, (float)($product['discount_value'] ?? 0));
+    if ($value <= 0) return 0.0;
+
+    $now = $timestamp ?? time();
+    $start = !empty($product['discount_start']) ? strtotime($product['discount_start']) : null;
+    $end = !empty($product['discount_end']) ? strtotime($product['discount_end']) : null;
+    if (($start !== null && $now < $start) || ($end !== null && $now > $end)) return 0.0;
+
+    return $value;
+}
+
+function ensureCustomerDobSchema(): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        if (!db()->fetchOne("SHOW COLUMNS FROM customers LIKE 'dob'")) {
+            db()->query("ALTER TABLE customers ADD COLUMN dob DATE NULL AFTER email");
+        }
+    } catch (Exception $e) {
+        // The schema file remains the source of truth for fresh installations.
+    }
+}
+
+function ensureOrderDiscountSchema(): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $columns = db()->fetchAll("SHOW COLUMNS FROM orders");
+        $existing = array_column($columns, 'Field');
+        foreach (['promotion_discount', 'normal_discount'] as $column) {
+            if (!in_array($column, $existing, true)) {
+                db()->query("ALTER TABLE orders ADD COLUMN `$column` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER discount_amount");
+            }
+        }
+        $itemColumns = db()->fetchAll("SHOW COLUMNS FROM order_items");
+        $itemExisting = array_column($itemColumns, 'Field');
+        foreach (['promotion_discount', 'normal_discount'] as $column) {
+            if (!in_array($column, $itemExisting, true)) {
+                db()->query("ALTER TABLE order_items ADD COLUMN `$column` DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER subtotal");
+            }
+        }
+        db()->query(
+            "CREATE TABLE IF NOT EXISTS product_discount_history (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                product_id INT NOT NULL,
+                discount_type ENUM('percentage', 'fixed') NOT NULL DEFAULT 'percentage',
+                discount_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                discount_start DATETIME NULL,
+                discount_end DATETIME NULL,
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+    } catch (Exception $e) {
+        // The schema files remain the source of truth for fresh installations.
+    }
+}
+
 function paginationUrl(array $params, int $page): string {
     $params['page'] = $page;
     return '?' . http_build_query(array_filter($params, static function ($value) {

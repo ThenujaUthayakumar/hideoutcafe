@@ -20,7 +20,9 @@ if (empty($data) || empty($data['items'])) {
 }
 
 try {
-    db()->query("ALTER TABLE customers MODIFY COLUMN loyalty_points DECIMAL(10,2) NOT NULL DEFAULT 0.00");
+    ensureProductDiscountSchema();
+    ensureCustomerDobSchema();
+    ensureOrderDiscountSchema();
     $db = db();
     $db->beginTransaction();
 
@@ -50,6 +52,10 @@ try {
     $changeAmount  = (float)($data['change_amount'] ?? 0);
     $notes         = sanitize($data['notes'] ?? '');
     $orderStatus   = sanitize($data['order_status'] ?? STATUS_COMPLETED);
+    $productDiscountAmount = 0.0;
+    $grossSubtotal = 0.0;
+    $eligibleSubtotal = 0.0;
+    $itemDiscounts = [];
 
     // Insert Order Record
     $orderSql = "INSERT INTO orders (
@@ -87,9 +93,9 @@ try {
 
     // Insert Order Items & Deduct Stock
     $itemSql = "INSERT INTO order_items (
-        order_id, product_id, product_name, variant_name, unit_price, quantity, subtotal, modifiers_json, notes
+        order_id, product_id, product_name, variant_name, unit_price, quantity, subtotal, promotion_discount, normal_discount, modifiers_json, notes
     ) VALUES (
-        :order_id, :product_id, :product_name, :variant_name, :unit_price, :quantity, :subtotal, :modifiers_json, :notes
+        :order_id, :product_id, :product_name, :variant_name, :unit_price, :quantity, :subtotal, 0, 0, :modifiers_json, :notes
     )";
 
     foreach ($data['items'] as $item) {
@@ -99,6 +105,18 @@ try {
         $unitPrice   = (float)$item['unit_price'];
         $qty         = max(1, (int)$item['quantity']);
         $itemSubtotal= (float)$item['subtotal'];
+        $product = $db->fetchOne("SELECT discount_type, discount_value, discount_start, discount_end FROM products WHERE id = :pid AND status = 'active'", [':pid' => $prodId]);
+        if (!$product) throw new Exception('A product in this order is no longer available.');
+        $grossSubtotal += $itemSubtotal;
+        $promotionValue = getActiveProductDiscount($product);
+        if ($promotionValue > 0) {
+            $lineDiscount = $product['discount_type'] === 'fixed' ? $promotionValue * $qty : ($itemSubtotal * $promotionValue) / 100;
+            $lineDiscount = min($itemSubtotal, $lineDiscount);
+            $productDiscountAmount += $lineDiscount;
+        } else {
+            $lineDiscount = 0.0;
+            $eligibleSubtotal += $itemSubtotal;
+        }
         $modifiers   = !empty($item['modifiers']) ? json_encode($item['modifiers']) : '[]';
         $itemNotes   = sanitize($item['notes'] ?? '');
 
@@ -113,6 +131,7 @@ try {
             ':modifiers_json' => $modifiers,
             ':notes'          => $itemNotes
         ]);
+        $itemDiscounts[] = ['id' => (int)$db->lastInsertId(), 'subtotal' => $itemSubtotal, 'promotion' => $lineDiscount];
 
         // Deduct inventory if track_stock is enabled
         $db->query(
@@ -130,12 +149,32 @@ try {
         }
     }
 
-    // Award Loyalty Points to customer
-    if ($customerId && $customerId > 1 && getSettings('enable_loyalty') == '1') {
-        $pointsEarned = round($grandTotal / 1000, 2);
+    $orderDiscountBase = max(0, $eligibleSubtotal);
+    $orderDiscount = $discountType === 'percentage' ? ($orderDiscountBase * max(0, $discountVal)) / 100 : max(0, $discountVal);
+    $orderDiscount = min($orderDiscountBase, $orderDiscount);
+    $discountAmt = $productDiscountAmount + $orderDiscount;
+    $subtotal = $grossSubtotal;
+    $grandTotal = max(0, $grossSubtotal - $productDiscountAmount - $orderDiscount + $taxAmount + $serviceCharge);
+    $changeAmount = max(0, $paidAmount - $grandTotal);
+    $db->query(
+        "UPDATE orders SET subtotal = :subtotal, discount_amount = :discount_amount, promotion_discount = :promotion_discount, normal_discount = :normal_discount, discount_percent = :discount_percent, grand_total = :grand_total, change_amount = :change_amount WHERE id = :order_id",
+        [':subtotal' => $subtotal, ':discount_amount' => $discountAmt, ':promotion_discount' => $productDiscountAmount, ':normal_discount' => $orderDiscount, ':discount_percent' => $discountType === 'percentage' ? max(0, $discountVal) : 0, ':grand_total' => $grandTotal, ':change_amount' => $changeAmount, ':order_id' => $orderId]
+    );
+    foreach ($itemDiscounts as $itemDiscount) {
+        $normalLineDiscount = $eligibleSubtotal > 0 && $itemDiscount['promotion'] == 0
+            ? ($orderDiscount * $itemDiscount['subtotal']) / $eligibleSubtotal
+            : 0;
         $db->query(
-            "UPDATE customers SET loyalty_points = loyalty_points + :pts, total_spent = total_spent + :spent WHERE id = :cid",
-            [':pts' => $pointsEarned, ':spent' => $grandTotal, ':cid' => $customerId]
+            "UPDATE order_items SET promotion_discount = :promotion_discount, normal_discount = :normal_discount WHERE id = :id",
+            [':promotion_discount' => $itemDiscount['promotion'], ':normal_discount' => $normalLineDiscount, ':id' => $itemDiscount['id']]
+        );
+    }
+
+    // Keep spend independent from the optional loyalty feature toggle.
+    if ($customerId && $customerId > 1) {
+        $db->query(
+            "UPDATE customers SET total_spent = total_spent + :spent, loyalty_points = ROUND((total_spent + :spent_for_points) / 1000, 2) WHERE id = :cid",
+            [':spent' => $grandTotal, ':spent_for_points' => $grandTotal, ':cid' => $customerId]
         );
     }
 

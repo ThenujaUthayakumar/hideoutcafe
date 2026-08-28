@@ -9,6 +9,8 @@ $title = 'POS Terminal';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
 $user = currentUser();
+ensureProductDiscountSchema();
+ensureCustomerDobSchema();
 
 // Fetch Categories
 $categories = db()->fetchAll("SELECT * FROM categories WHERE status = 'active' ORDER BY sort_order ASC, name ASC");
@@ -109,6 +111,7 @@ require_once __DIR__ . '/includes/header.php';
                         <div class="mt-3 pt-2.5 border-t border-stone-800 flex items-center justify-between">
                             <div>
                                 <span class="text-sm sm:text-base font-black text-red-400"><?= $currency ?> <?= number_format($prod['price'], 2) ?></span>
+                                <?php if (getActiveProductDiscount($prod) > 0): ?><span class="block text-[10px] font-bold text-emerald-400">Discount active</span><?php endif; ?>
                                 <?php if (!empty($prod['variants'])): ?>
                                     <span class="block text-[10px] text-stone-500 font-semibold">+ Sizes</span>
                                 <?php endif; ?>
@@ -178,8 +181,16 @@ require_once __DIR__ . '/includes/header.php';
                     <span id="pos-subtotal" class="font-bold text-white"><?= $currency ?> 0.00</span>
                 </div>
                 <div class="flex justify-between text-stone-400 font-medium">
-                    <span>Discount:</span>
-                    <span id="pos-discount" class="font-bold text-rose-400">-<?= $currency ?> 0.00</span>
+                    <span>Promotion Discount:</span>
+                    <span id="pos-promotion-discount" class="font-bold text-emerald-400">-<?= $currency ?> 0.00</span>
+                </div>
+                <div class="flex justify-between text-stone-400 font-medium">
+                    <span>Normal Discount:</span>
+                    <span id="pos-normal-discount" class="font-bold text-rose-400">-<?= $currency ?> 0.00</span>
+                </div>
+                <div class="flex justify-between text-stone-500 font-medium">
+                    <span>Total Discount:</span>
+                    <span id="pos-total-discount" class="font-bold text-rose-400">-<?= $currency ?> 0.00</span>
                 </div>
                 <div class="border-t border-stone-800 pt-2 flex justify-between items-center text-base font-black text-white">
                     <span>Total Amount:</span>
@@ -299,8 +310,8 @@ require_once __DIR__ . '/includes/header.php';
                     <input type="text" id="new_cust_phone" required class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-stone-300 mb-1">Email Address</label>
-                    <input type="email" id="new_cust_email" class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                    <label class="block text-xs font-bold text-stone-300 mb-1">Date of Birth (Optional)</label>
+                    <input type="date" id="new_cust_dob" class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
                 </div>
                 <button type="submit" class="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md shadow-red-900/40 transition">Save & Assign Customer</button>
             </form>
@@ -468,12 +479,12 @@ require_once __DIR__ . '/includes/header.php';
     e.preventDefault();
     const name = document.getElementById('new_cust_name').value;
     const phone = document.getElementById('new_cust_phone').value;
-    const email = document.getElementById('new_cust_email').value;
+    const dob = document.getElementById('new_cust_dob').value;
 
     const res = await fetch('<?= BASE_URL ?>/api/save_customer.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, phone, email })
+    body: JSON.stringify({ name, phone, dob })
     });
     const data = await res.json();
     if (data.success) {

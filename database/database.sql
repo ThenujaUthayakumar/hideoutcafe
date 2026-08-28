@@ -6,6 +6,7 @@ CREATE DATABASE IF NOT EXISTS `cafe_pos_db` DEFAULT CHARACTER SET utf8mb4 COLLAT
 USE `cafe_pos_db`;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS `product_discount_history`;
 DROP TABLE IF EXISTS `order_items`;
 DROP TABLE IF EXISTS `orders`;
 DROP TABLE IF EXISTS `held_orders`;
@@ -216,7 +217,12 @@ CREATE TABLE `customers` (
   `name` VARCHAR(100) NOT NULL,
   `phone` VARCHAR(25) NOT NULL UNIQUE,
   `email` VARCHAR(100) NULL,
+  `dob` DATE NULL,
   `address` TEXT NULL,
+    `discount_type` ENUM('percentage', 'fixed') NOT NULL DEFAULT 'percentage',
+    `discount_value` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `discount_start` DATETIME NULL,
+    `discount_end` DATETIME NULL,
   `loyalty_points` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `total_spent` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `notes` TEXT NULL,
@@ -259,6 +265,8 @@ CREATE TABLE `orders` (
   `user_id` INT NOT NULL,
   `subtotal` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `discount_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `promotion_discount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `normal_discount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `discount_percent` DECIMAL(5,2) NOT NULL DEFAULT 0.00,
   `tax_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `service_charge` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -285,10 +293,24 @@ CREATE TABLE `order_items` (
   `unit_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `quantity` INT NOT NULL DEFAULT 1,
   `subtotal` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `promotion_discount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `normal_discount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `modifiers_json` TEXT NULL,
   `notes` VARCHAR(255) NULL,
   FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`product_id`) REFERENCES `products`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Product Discount History
+CREATE TABLE `product_discount_history` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `product_id` INT NOT NULL,
+  `discount_type` ENUM('percentage', 'fixed') NOT NULL DEFAULT 'percentage',
+  `discount_value` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `discount_start` DATETIME NULL,
+  `discount_end` DATETIME NULL,
+  `recorded_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Held Orders

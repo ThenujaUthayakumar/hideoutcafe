@@ -3,6 +3,7 @@
  * API - Fetch Products by Category or Search
  */
 require_once __DIR__ . '/../config/functions.php';
+ensureProductDiscountSchema();
 
 header('Content-Type: application/json');
 
