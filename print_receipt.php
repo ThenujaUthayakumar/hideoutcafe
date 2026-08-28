@@ -10,6 +10,7 @@ $autoPrint = !empty($_GET['auto_print']);
 $currentUser = currentUser();
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+ensureOrderDiscountSchema();
 $orderOwnerFilter = '';
 $orderParams = [':id' => $orderId];
 

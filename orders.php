@@ -38,11 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->query("UPDATE products SET stock_quantity = stock_quantity + :qty WHERE id = :pid AND track_stock = 1", [':qty' => $item['quantity'], ':pid' => $item['product_id']]);
             }
 
-            if (!empty($order['customer_id']) && (int)$order['customer_id'] > 1 && getSettings('enable_loyalty') == '1') {
-                $points = round((float)$order['grand_total'] / 1000, 2);
-                if ($points > 0) {
-                    $db->query("UPDATE customers SET loyalty_points = GREATEST(0, loyalty_points - :points), total_spent = GREATEST(0, total_spent - :spent) WHERE id = :customer_id", [':points' => $points, ':spent' => $order['grand_total'], ':customer_id' => $order['customer_id']]);
-                }
+            if (!empty($order['customer_id']) && (int)$order['customer_id'] > 1) {
+                $db->query("UPDATE customers SET total_spent = GREATEST(0, total_spent - :spent), loyalty_points = ROUND(GREATEST(0, total_spent - :spent_for_points) / 1000, 2) WHERE id = :customer_id", [':spent' => $order['grand_total'], ':spent_for_points' => $order['grand_total'], ':customer_id' => $order['customer_id']]);
             }
 
             if (!empty($order['table_id'])) {
@@ -85,6 +82,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     "UPDATE products SET stock_quantity = stock_quantity + :qty WHERE id = :pid AND track_stock = 1",
                     [':qty' => $it['quantity'], ':pid' => $it['product_id']]
                 );
+            }
+
+            if (!empty($order['customer_id']) && (int)$order['customer_id'] > 1) {
+                db()->query("UPDATE customers SET total_spent = GREATEST(0, total_spent - :spent), loyalty_points = ROUND(GREATEST(0, total_spent - :spent_for_points) / 1000, 2) WHERE id = :customer_id", [':spent' => $order['grand_total'], ':spent_for_points' => $order['grand_total'], ':customer_id' => $order['customer_id']]);
             }
 
             // Free table

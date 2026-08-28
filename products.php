@@ -8,6 +8,8 @@ requireRole([ROLE_ADMIN, ROLE_MANAGER]);
 $title = 'Products Catalog';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+ensureProductDiscountSchema();
+ensureOrderDiscountSchema();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -19,6 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $catId = (int)$_POST['category_id'];
         $price = (float)$_POST['price'];
         $cost = (float)$_POST['cost_price'];
+        $discountType = ($_POST['discount_type'] ?? 'percentage') === 'fixed' ? 'fixed' : 'percentage';
+        $discountValue = max(0, (float)($_POST['discount_value'] ?? 0));
+        $discountStart = !empty($_POST['discount_start']) ? date('Y-m-d H:i:s', strtotime($_POST['discount_start'])) : null;
+        $discountEnd = !empty($_POST['discount_end']) ? date('Y-m-d H:i:s', strtotime($_POST['discount_end'])) : null;
         $desc = sanitize($_POST['description'] ?? '');
         $trackStock = isset($_POST['track_stock']) ? 1 : 0;
         $stock = (int)($_POST['stock_quantity'] ?? 0);
@@ -27,14 +33,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($id) {
             db()->query(
-                "UPDATE products SET category_id = :cat, name = :name, code = :code, description = :desc, price = :price, cost_price = :cost, track_stock = :ts, stock_quantity = :sq, alert_quantity = :aq, status = :st WHERE id = :id",
-                [':cat' => $catId, ':name' => $name, ':code' => $code, ':desc' => $desc, ':price' => $price, ':cost' => $cost, ':ts' => $trackStock, ':sq' => $stock, ':aq' => $alert, ':st' => $status, ':id' => $id]
+                "UPDATE products SET category_id = :cat, name = :name, code = :code, description = :desc, price = :price, cost_price = :cost, discount_type = :discount_type, discount_value = :discount_value, discount_start = :discount_start, discount_end = :discount_end, track_stock = :ts, stock_quantity = :sq, alert_quantity = :aq, status = :st WHERE id = :id",
+                [':cat' => $catId, ':name' => $name, ':code' => $code, ':desc' => $desc, ':price' => $price, ':cost' => $cost, ':discount_type' => $discountType, ':discount_value' => $discountValue, ':discount_start' => $discountStart, ':discount_end' => $discountEnd, ':ts' => $trackStock, ':sq' => $stock, ':aq' => $alert, ':st' => $status, ':id' => $id]
             );
             setFlash('success', "Product '$name' updated.");
         } else {
             db()->query(
-                "INSERT INTO products (category_id, name, code, description, price, cost_price, track_stock, stock_quantity, alert_quantity, status) VALUES (:cat, :name, :code, :desc, :price, :cost, :ts, :sq, :aq, :st)",
-                [':cat' => $catId, ':name' => $name, ':code' => $code, ':desc' => $desc, ':price' => $price, ':cost' => $cost, ':ts' => $trackStock, ':sq' => $stock, ':aq' => $alert, ':st' => $status]
+                "INSERT INTO products (category_id, name, code, description, price, cost_price, discount_type, discount_value, discount_start, discount_end, track_stock, stock_quantity, alert_quantity, status) VALUES (:cat, :name, :code, :desc, :price, :cost, :discount_type, :discount_value, :discount_start, :discount_end, :ts, :sq, :aq, :st)",
+                [':cat' => $catId, ':name' => $name, ':code' => $code, ':desc' => $desc, ':price' => $price, ':cost' => $cost, ':discount_type' => $discountType, ':discount_value' => $discountValue, ':discount_start' => $discountStart, ':discount_end' => $discountEnd, ':ts' => $trackStock, ':sq' => $stock, ':aq' => $alert, ':st' => $status]
             );
             $id = (int)db()->lastInsertId();
             setFlash('success', "New product '$name' added.");
@@ -52,6 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+
+        db()->query(
+            "INSERT INTO product_discount_history (product_id, discount_type, discount_value, discount_start, discount_end) VALUES (:product_id, :discount_type, :discount_value, :discount_start, :discount_end)",
+            [':product_id' => $id, ':discount_type' => $discountType, ':discount_value' => $discountValue, ':discount_start' => $discountStart, ':discount_end' => $discountEnd]
+        );
 
         header("Location: " . BASE_URL . "/products.php");
         exit;
@@ -93,6 +104,10 @@ $totalPages = max(1, (int)ceil($totalProducts / $perPage));
 $page = min($page, $totalPages);
 $sql .= " LIMIT " . (($page - 1) * $perPage) . ", " . $perPage;
 $products = db()->fetchAll($sql, $params);
+
+$discountHistory = db()->fetchAll(
+    "SELECT h.*, p.name AS product_name FROM product_discount_history h JOIN products p ON p.id = h.product_id ORDER BY h.recorded_at DESC LIMIT 100"
+);
 
 // Fetch Variants
 $variantsMap = [];
@@ -150,6 +165,8 @@ require_once __DIR__ . '/includes/sidebar.php';
                             <th class="p-3.5">Category</th>
                             <th class="p-3.5 text-right">Selling Price</th>
                             <th class="p-3.5 text-right">Cost Price</th>
+                            <th class="p-3.5">Discount</th>
+                            <th class="p-3.5">History</th>
                             <th class="p-3.5">Sizes / Variants</th>
                             <th class="p-3.5 text-center">Stock Level</th>
                             <th class="p-3.5 text-center">Status</th>
@@ -158,7 +175,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </thead>
                     <tbody class="divide-y divide-stone-800">
                         <?php if (empty($products)): ?>
-                            <tr><td colspan="8" class="p-8 text-center text-stone-500">No products found.</td></tr>
+                            <tr><td colspan="10" class="p-8 text-center text-stone-500">No products found.</td></tr>
                         <?php else: ?>
                             <?php foreach ($products as $p): ?>
                             <tr class="hover:bg-stone-950/80 transition">
@@ -171,6 +188,15 @@ require_once __DIR__ . '/includes/sidebar.php';
                                 </td>
                                 <td class="p-3.5 text-right font-black text-red-400 text-sm"><?= $currency ?> <?= number_format($p['price'], 2) ?></td>
                                 <td class="p-3.5 text-right font-medium text-stone-400"><?= $currency ?> <?= number_format($p['cost_price'], 2) ?></td>
+                                <td class="p-3.5 text-stone-300">
+                                    <?php if (getActiveProductDiscount($p) > 0): ?>
+                                        <span class="font-bold text-emerald-400"><?= $p['discount_type'] === 'fixed' ? $currency . ' ' . number_format($p['discount_value'], 2) : number_format($p['discount_value'], 2) . '%' ?></span>
+                                        <span class="block text-[10px] text-stone-500"><?= e($p['discount_end'] ? 'Until ' . date('M d, h:i A', strtotime($p['discount_end'])) : 'No end date') ?></span>
+                                    <?php else: ?>
+                                        <span class="text-stone-500">None</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="p-3.5 text-[10px] text-stone-400">See recent changes below</td>
                                 <td class="p-3.5">
                                     <?php if (!empty($variantsMap[$p['id']])): ?>
                                         <div class="flex flex-wrap gap-1">
@@ -217,6 +243,24 @@ require_once __DIR__ . '/includes/sidebar.php';
                 </table>
             </div>
             <?= renderPagination($page, $totalProducts, $perPage, ['q' => $search, 'cat' => $catFilter], true) ?>
+        </div>
+
+        <div class="bg-stone-900 border border-stone-800 rounded-3xl overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-stone-800">
+                <h3 class="font-black text-white">Product Discount History</h3>
+                <p class="text-[11px] text-stone-500">Every saved discount configuration is retained for future reference.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-stone-950 text-stone-400 font-bold uppercase text-[10px]"><tr><th class="p-3">Product</th><th class="p-3">Discount</th><th class="p-3">Period</th><th class="p-3">Recorded</th></tr></thead>
+                    <tbody class="divide-y divide-stone-800">
+                    <?php foreach ($discountHistory as $history): ?>
+                        <tr><td class="p-3 font-bold text-white"><?= e($history['product_name']) ?></td><td class="p-3 text-emerald-400"><?= $history['discount_type'] === 'fixed' ? $currency . ' ' . number_format($history['discount_value'], 2) : number_format($history['discount_value'], 2) . '%' ?></td><td class="p-3 text-stone-400"><?= e($history['discount_start'] ?: 'Any time') ?> to <?= e($history['discount_end'] ?: 'No end') ?></td><td class="p-3 text-stone-500"><?= e($history['recorded_at']) ?></td></tr>
+                    <?php endforeach; ?>
+                    <?php if (empty($discountHistory)): ?><tr><td colspan="4" class="p-6 text-center text-stone-500">No discount changes recorded yet.</td></tr><?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
     </div>
@@ -267,6 +311,19 @@ require_once __DIR__ . '/includes/sidebar.php';
             <div>
                 <label class="block text-xs font-bold text-stone-300 mb-1">Description</label>
                 <textarea name="description" id="prod_form_desc" rows="2" class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white"></textarea>
+            </div>
+
+            <div class="p-3 bg-emerald-950/30 rounded-2xl border border-emerald-900/60 space-y-2">
+                <span class="block text-xs font-bold text-emerald-300">Product Discount (Optional)</span>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <select name="discount_type" id="prod_form_discount_type" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                        <option value="percentage">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount (<?= $currency ?>)</option>
+                    </select>
+                    <input type="number" step="0.01" min="0" name="discount_value" id="prod_form_discount_value" value="0" placeholder="Value" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                    <input type="datetime-local" name="discount_start" id="prod_form_discount_start" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                </div>
+                <input type="datetime-local" name="discount_end" id="prod_form_discount_end" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
             </div>
 
             <!-- Inventory Tracking -->
@@ -329,6 +386,10 @@ function openProductModal() {
   document.getElementById('prod_form_price').value = '';
   document.getElementById('prod_form_cost').value = '0.00';
   document.getElementById('prod_form_desc').value = '';
+    document.getElementById('prod_form_discount_type').value = 'percentage';
+    document.getElementById('prod_form_discount_value').value = '0';
+    document.getElementById('prod_form_discount_start').value = '';
+    document.getElementById('prod_form_discount_end').value = '';
   document.getElementById('prod_form_track_stock').checked = true;
   document.getElementById('prod_form_stock').value = '100';
   document.getElementById('prod_form_alert').value = '15';
@@ -348,6 +409,10 @@ function editProduct(p, variants) {
   document.getElementById('prod_form_price').value = p.price;
   document.getElementById('prod_form_cost').value = p.cost_price;
   document.getElementById('prod_form_desc').value = p.description || '';
+    document.getElementById('prod_form_discount_type').value = p.discount_type || 'percentage';
+    document.getElementById('prod_form_discount_value').value = p.discount_value || '0';
+    document.getElementById('prod_form_discount_start').value = (p.discount_start || '').replace(' ', 'T').slice(0, 16);
+    document.getElementById('prod_form_discount_end').value = (p.discount_end || '').replace(' ', 'T').slice(0, 16);
   document.getElementById('prod_form_track_stock').checked = p.track_stock == 1;
   document.getElementById('prod_form_stock').value = p.stock_quantity;
   document.getElementById('prod_form_alert').value = p.alert_quantity;

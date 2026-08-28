@@ -12,11 +12,11 @@ if (!isLoggedIn()) {
 
 $query = trim($_GET['q'] ?? '');
 
-$sql = "SELECT id, name, phone, email, loyalty_points, total_spent FROM customers";
+$sql = "SELECT id, name, phone, dob, loyalty_points, total_spent FROM customers";
 $params = [];
 
 if (!empty($query)) {
-    $sql .= " WHERE name LIKE :q1 OR phone LIKE :q2 OR email LIKE :q3";
+    $sql .= " WHERE name LIKE :q1 OR phone LIKE :q2 OR dob LIKE :q3";
     $params[':q1'] = "%$query%";
     $params[':q2'] = "%$query%";
     $params[':q3'] = "%$query%";

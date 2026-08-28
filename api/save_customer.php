@@ -15,8 +15,9 @@ $data = json_decode($rawInput, true);
 
 $name = sanitize($data['name'] ?? '');
 $phone = sanitize($data['phone'] ?? '');
-$email = sanitize($data['email'] ?? '');
+$dob = !empty($data['dob']) ? sanitize($data['dob']) : null;
 $address = sanitize($data['address'] ?? '');
+ensureCustomerDobSchema();
 
 if (empty($name) || empty($phone)) {
     jsonResponse(['success' => false, 'message' => 'Name and Phone number are required.'], 400);
@@ -30,12 +31,12 @@ try {
     }
 
     db()->query(
-        "INSERT INTO customers (name, phone, email, address, loyalty_points, total_spent) 
-         VALUES (:name, :phone, :email, :address, 0, 0.00)",
+        "INSERT INTO customers (name, phone, dob, address, loyalty_points, total_spent)
+         VALUES (:name, :phone, :dob, :address, 0, 0.00)",
         [
             ':name'    => $name,
             ':phone'   => $phone,
-            ':email'   => $email,
+            ':dob'     => $dob,
             ':address' => $address
         ]
     );
@@ -49,7 +50,7 @@ try {
             'id'             => $newId,
             'name'           => $name,
             'phone'          => $phone,
-            'email'          => $email,
+            'dob'            => $dob,
             'loyalty_points' => 0
         ]
     ]);
