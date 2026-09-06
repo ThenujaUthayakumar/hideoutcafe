@@ -9,6 +9,7 @@ $orderId = !empty($_GET['id']) ? (int)$_GET['id'] : 0;
 $currentUser = currentUser();
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+ensureOrderDiscountSchema();
 $orderOwnerFilter = '';
 $orderParams = [':id' => $orderId];
 
@@ -124,6 +125,12 @@ $items = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id", [':id'
                             <?php if (!empty($it['variant_name'])): ?>
                                 <span class="block text-xs text-stone-500 font-semibold"><?= e($it['variant_name']) ?></span>
                             <?php endif; ?>
+                            <?php if ((float)($it['promotion_discount'] ?? 0) > 0): ?>
+                                <span class="block text-[11px] text-emerald-700">Promotion Discount: -<?= $currency ?> <?= number_format($it['promotion_discount'], 2) ?></span>
+                            <?php endif; ?>
+                            <?php if ((float)($it['normal_discount'] ?? 0) > 0): ?>
+                                <span class="block text-[11px] text-stone-500">Normal Discount: -<?= $currency ?> <?= number_format($it['normal_discount'], 2) ?></span>
+                            <?php endif; ?>
                             <?php
                             if (!empty($it['modifiers_json'])) {
                                 $mods = json_decode($it['modifiers_json'], true);
@@ -163,10 +170,23 @@ $items = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id", [':id'
                     <span>Subtotal:</span>
                     <span class="font-bold text-stone-900"><?= $currency ?> <?= number_format($order['subtotal'], 2) ?></span>
                 </div>
-                <?php if ($order['discount_amount'] > 0): ?>
+                <?php $promotionDiscount = (float)($order['promotion_discount'] ?? 0); $normalDiscount = (float)($order['normal_discount'] ?? max(0, (float)$order['discount_amount'] - $promotionDiscount)); ?>
+                <?php if ($promotionDiscount > 0): ?>
                 <div class="flex justify-between text-rose-600">
-                    <span>Discount:</span>
-                    <span class="font-bold">-<?= $currency ?> <?= number_format($order['discount_amount'], 2) ?></span>
+                    <span>Promotion Discount:</span>
+                    <span class="font-bold">-<?= $currency ?> <?= number_format($promotionDiscount, 2) ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if ($normalDiscount > 0): ?>
+                <div class="flex justify-between text-rose-600">
+                    <span>Normal Discount:</span>
+                    <span class="font-bold">-<?= $currency ?> <?= number_format($normalDiscount, 2) ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (($promotionDiscount + $normalDiscount) > 0): ?>
+                <div class="flex justify-between text-rose-700 font-bold">
+                    <span>Total Discount:</span>
+                    <span>-<?= $currency ?> <?= number_format($promotionDiscount + $normalDiscount, 2) ?></span>
                 </div>
                 <?php endif; ?>
                 <?php if ($order['tax_amount'] > 0): ?>

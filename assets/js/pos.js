@@ -120,6 +120,10 @@ const PosApp = {
           name: product.name,
           variantName: null,
           unitPrice: parseFloat(product.price),
+          discountType: product.discount_type || 'percentage',
+          discountValue: parseFloat(product.discount_value) || 0,
+          discountStart: product.discount_start || null,
+          discountEnd: product.discount_end || null,
           modifiers: [],
           notes: '',
           quantity: 1
@@ -212,6 +216,10 @@ const PosApp = {
       name: product.name,
       variantName: variantName,
       unitPrice: basePrice,
+      discountType: product.discount_type || 'percentage',
+      discountValue: parseFloat(product.discount_value) || 0,
+      discountStart: product.discount_start || null,
+      discountEnd: product.discount_end || null,
       modifiers: selectedModifiers,
       notes: notes,
       quantity: 1
@@ -315,6 +323,9 @@ const PosApp = {
 
 getCalculations() {
   let subtotal = 0;
+  let productDiscount = 0;
+  let eligibleSubtotal = 0;
+  const now = Date.now();
 
   this.state.cart.forEach(item => {
     let itemUnit = parseFloat(item.unitPrice) || 0;
@@ -325,26 +336,40 @@ getCalculations() {
       });
     }
 
-    subtotal += itemUnit * item.quantity;
+    const lineSubtotal = itemUnit * item.quantity;
+    subtotal += lineSubtotal;
+
+    const start = item.discountStart ? new Date(item.discountStart.replace(' ', 'T')).getTime() : null;
+    const end = item.discountEnd ? new Date(item.discountEnd.replace(' ', 'T')).getTime() : null;
+    const active = (!start || now >= start) && (!end || now <= end);
+    if (active && item.discountValue > 0) {
+      const discount = item.discountType === 'fixed'
+        ? item.discountValue * item.quantity
+        : (lineSubtotal * item.discountValue) / 100;
+      productDiscount += Math.min(lineSubtotal, discount);
+    } else {
+      eligibleSubtotal += lineSubtotal;
+    }
   });
 
-  let discount = 0;
+  const afterProductDiscount = Math.max(0, subtotal - productDiscount);
+  let orderDiscount = 0;
 
   if (this.state.discountType === 'percentage') {
-    discount = (subtotal * (parseFloat(this.state.discountValue) || 0)) / 100;
+    orderDiscount = (eligibleSubtotal * (parseFloat(this.state.discountValue) || 0)) / 100;
   } else {
-    discount = parseFloat(this.state.discountValue) || 0;
+    orderDiscount = parseFloat(this.state.discountValue) || 0;
   }
 
-  // Discount cannot exceed subtotal
-  if (discount > subtotal) {
-    discount = subtotal;
-  }
+  orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
+  const discount = productDiscount + orderDiscount;
 
-  const grandTotal = Math.max(0, subtotal - discount);
+  const grandTotal = Math.max(0, afterProductDiscount - orderDiscount);
 
   return {
     subtotal,
+    productDiscount,
+    orderDiscount,
     discount,
     grandTotal
   };
@@ -354,6 +379,7 @@ getCalculations() {
     const cartContainer = document.getElementById('pos-cart-items');
     const badge = document.getElementById('pos-cart-count');
     const calc = this.getCalculations();
+    const now = Date.now();
 
     if (badge) badge.textContent = this.state.cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -379,7 +405,14 @@ getCalculations() {
           }).join('');
         }
 
-        const itemTotal = (item.unitPrice + modTotal) * item.quantity;
+        const itemSubtotal = (item.unitPrice + modTotal) * item.quantity;
+        const itemStart = item.discountStart ? new Date(item.discountStart.replace(' ', 'T')).getTime() : null;
+        const itemEnd = item.discountEnd ? new Date(item.discountEnd.replace(' ', 'T')).getTime() : null;
+        const itemDiscountActive = (!itemStart || now >= itemStart) && (!itemEnd || now <= itemEnd);
+        const itemDiscount = itemDiscountActive && item.discountValue > 0
+          ? Math.min(itemSubtotal, item.discountType === 'fixed' ? item.discountValue * item.quantity : itemSubtotal * item.discountValue / 100)
+          : 0;
+        const itemTotal = itemSubtotal - itemDiscount;
         const variantHtml = item.variantName ? `<span class="text-xs text-stone-500 font-normal">(${item.variantName})</span>` : '';
         const notesHtml = item.notes ? `<p class="text-[11px] text-red-600 italic mt-0.5"><i class="fa-regular fa-note-sticky mr-1"></i>${item.notes}</p>` : '';
 
@@ -411,7 +444,10 @@ getCalculations() {
 
     // Update Summary Box
     document.getElementById('pos-subtotal').textContent = `${this.state.currencySymbol} ${calc.subtotal.toFixed(2)}`;
-    document.getElementById('pos-discount').textContent = `-${this.state.currencySymbol} ${calc.discount.toFixed(2)}`;
+    document.getElementById('pos-promotion-discount').textContent = `-${this.state.currencySymbol} ${calc.productDiscount.toFixed(2)}`;
+    document.getElementById('pos-normal-discount').textContent = `-${this.state.currencySymbol} ${calc.orderDiscount.toFixed(2)}`;
+    const totalDiscountElement = document.getElementById('pos-total-discount');
+    if (totalDiscountElement) totalDiscountElement.textContent = `-${this.state.currencySymbol} ${calc.discount.toFixed(2)}`;
     document.getElementById('pos-grand-total').textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
     
     // Bottom Pay Button
@@ -507,6 +543,8 @@ getCalculations() {
       discount_type: this.state.discountType,
       discount_value: this.state.discountValue,
       discount_amount: calc.discount,
+      promotion_discount: calc.productDiscount,
+      normal_discount: calc.orderDiscount,
       subtotal: calc.subtotal,
       grand_total: calc.grandTotal,
       order_status: 'pending',

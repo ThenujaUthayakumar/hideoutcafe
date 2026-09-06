@@ -8,6 +8,23 @@ requireAuth();
 $title = 'Customers & Loyalty';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? '$';
+ensureCustomerDobSchema();
+
+try {
+    db()->query(
+        "UPDATE customers c
+         LEFT JOIN (
+             SELECT customer_id, SUM(grand_total) AS spent
+             FROM orders
+             WHERE payment_status = 'paid' AND order_status <> 'cancelled'
+             GROUP BY customer_id
+         ) valid_orders ON valid_orders.customer_id = c.id
+         SET c.total_spent = COALESCE(valid_orders.spent, c.total_spent),
+             c.loyalty_points = ROUND(COALESCE(valid_orders.spent, c.total_spent) / 1000, 2)"
+    );
+} catch (Exception $e) {
+    // Existing installations can continue until their order schema is upgraded.
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -16,21 +33,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cid = !empty($_POST['customer_id']) ? (int)$_POST['customer_id'] : null;
         $name = sanitize($_POST['name']);
         $phone = sanitize($_POST['phone']);
-        $email = sanitize($_POST['email'] ?? '');
+        $dob = !empty($_POST['dob']) ? sanitize($_POST['dob']) : null;
         $address = sanitize($_POST['address'] ?? '');
-        $points = max(0, (float)($_POST['loyalty_points'] ?? 0));
         $notes = sanitize($_POST['notes'] ?? '');
 
         if ($cid) {
             db()->query(
-                "UPDATE customers SET name = :name, phone = :phone, email = :email, address = :addr, loyalty_points = :pts, notes = :notes WHERE id = :id",
-                [':name' => $name, ':phone' => $phone, ':email' => $email, ':addr' => $address, ':pts' => $points, ':notes' => $notes, ':id' => $cid]
+                "UPDATE customers SET name = :name, phone = :phone, dob = :dob, address = :addr, notes = :notes WHERE id = :id",
+                [':name' => $name, ':phone' => $phone, ':dob' => $dob, ':addr' => $address, ':notes' => $notes, ':id' => $cid]
             );
             setFlash('success', "Customer '{$name}' updated.");
         } else {
             db()->query(
-                "INSERT INTO customers (name, phone, email, address, loyalty_points, notes) VALUES (:name, :phone, :email, :addr, :pts, :notes)",
-                [':name' => $name, ':phone' => $phone, ':email' => $email, ':addr' => $address, ':pts' => $points, ':notes' => $notes]
+                "INSERT INTO customers (name, phone, dob, address, notes) VALUES (:name, :phone, :dob, :addr, :notes)",
+                [':name' => $name, ':phone' => $phone, ':dob' => $dob, ':addr' => $address, ':notes' => $notes]
             );
             setFlash('success', "Customer '{$name}' added.");
         }
@@ -50,6 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $query = trim($_GET['q'] ?? '');
+$perPage = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
 $sql = "SELECT c.*, COUNT(o.id) as order_count 
         FROM customers c 
         LEFT JOIN orders o ON c.id = o.customer_id 
@@ -57,13 +75,18 @@ $sql = "SELECT c.*, COUNT(o.id) as order_count
 $params = [];
 
 if (!empty($query)) {
-    $sql .= " AND (c.name LIKE :q1 OR c.phone LIKE :q2 OR c.email LIKE :q3)";
+    $sql .= " AND (c.name LIKE :q1 OR c.phone LIKE :q2 OR c.dob LIKE :q3)";
     $params[':q1'] = "%$query%";
     $params[':q2'] = "%$query%";
     $params[':q3'] = "%$query%";
 }
 $sql .= " GROUP BY c.id ORDER BY c.id DESC";
 
+$countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($sql) filtered_customers", $params);
+$totalCustomers = (int)($countRow['total'] ?? 0);
+$totalPages = max(1, (int)ceil($totalCustomers / $perPage));
+$page = min($page, $totalPages);
+$sql .= " LIMIT " . (($page - 1) * $perPage) . ", " . $perPage;
 $customers = db()->fetchAll($sql, $params);
 
 require_once __DIR__ . '/includes/header.php';
@@ -91,6 +114,9 @@ require_once __DIR__ . '/includes/sidebar.php';
                     <input type="text" name="q" value="<?= e($query) ?>" placeholder="Search customer by name, phone or email..." class="w-full pl-10 pr-3 py-2.5 rounded-xl">
                 </div>
                 <button type="submit" class="px-5 py-2.5 bg-red-600 text-white font-bold rounded-xl shadow-xs">Search</button>
+                <?php if ($query !== ''): ?>
+                    <a href="<?= BASE_URL ?>/customers.php" class="px-5 py-2.5 bg-stone-800 text-stone-300 font-bold rounded-xl">Clear</a>
+                <?php endif; ?>
             </form>
         </div>
 
@@ -102,7 +128,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                         <tr>
                             <th class="p-3.5">Customer Name</th>
                             <th class="p-3.5">Phone Number</th>
-                            <th class="p-3.5">Email</th>
+                            <th class="p-3.5">Date of Birth</th>
                             <th class="p-3.5 text-center">Visits</th>
                             <th class="p-3.5 text-right">Loyalty Points</th>
                             <th class="p-3.5 text-right">Total Spent</th>
@@ -122,7 +148,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                                     <?php endif; ?>
                                 </td>
                                 <td class="p-3.5 font-semibold text-stone-300"><?= e($c['phone']) ?></td>
-                                <td class="p-3.5 text-stone-400"><?= e($c['email'] ?? '-') ?></td>
+                                <td class="p-3.5 text-stone-400"><?= e($c['dob'] ?? '-') ?></td>
                                 <td class="p-3.5 text-center font-bold text-stone-200"><?= (int)$c['order_count'] ?></td>
                                 <td class="p-3.5 text-right">
                                     <span class="px-2.5 py-1 rounded-xl bg-red-950 text-red-400 border border-red-800 font-black text-xs"><?= number_format((float)$c['loyalty_points'], 2) ?> pts</span>
@@ -150,6 +176,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </tbody>
                 </table>
             </div>
+            <?= renderPagination($page, $totalCustomers, $perPage, ['q' => $query]) ?>
         </div>
 
     </div>
@@ -175,12 +202,8 @@ require_once __DIR__ . '/includes/sidebar.php';
                 <input type="text" name="phone" id="cust_form_phone" required class="w-full px-3.5 py-2 rounded-xl text-xs">
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-300 mb-1">Email Address</label>
-                <input type="email" name="email" id="cust_form_email" class="w-full px-3.5 py-2 rounded-xl text-xs">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-stone-300 mb-1">Loyalty Points Balance</label>
-                <input type="number" name="loyalty_points" id="cust_form_points" value="0" class="w-full px-3.5 py-2 rounded-xl text-xs font-bold">
+                <label class="block text-xs font-bold text-stone-300 mb-1">Date of Birth (Optional)</label>
+                <input type="date" name="dob" id="cust_form_dob" class="w-full px-3.5 py-2 rounded-xl text-xs">
             </div>
             <div>
                 <label class="block text-xs font-bold text-stone-300 mb-1">Address / Delivery Notes</label>
@@ -205,8 +228,7 @@ function openCustomerModal() {
   document.getElementById('cust_form_id').value = '';
   document.getElementById('cust_form_name').value = '';
   document.getElementById('cust_form_phone').value = '';
-  document.getElementById('cust_form_email').value = '';
-  document.getElementById('cust_form_points').value = '0';
+    document.getElementById('cust_form_dob').value = '';
   document.getElementById('cust_form_address').value = '';
   document.getElementById('cust_form_notes').value = '';
   openModal('customer-form-modal');
@@ -216,8 +238,7 @@ function editCustomer(c) {
   document.getElementById('cust_form_id').value = c.id;
   document.getElementById('cust_form_name').value = c.name;
   document.getElementById('cust_form_phone').value = c.phone;
-  document.getElementById('cust_form_email').value = c.email || '';
-  document.getElementById('cust_form_points').value = c.loyalty_points;
+    document.getElementById('cust_form_dob').value = c.dob || '';
   document.getElementById('cust_form_address').value = c.address || '';
   document.getElementById('cust_form_notes').value = c.notes || '';
   openModal('customer-form-modal');

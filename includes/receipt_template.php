@@ -6,6 +6,8 @@ if (!isset($settings)) {
     $settings = getSettings();
 }
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+$promotionDiscount = (float)($order['promotion_discount'] ?? 0);
+$normalDiscount = (float)($order['normal_discount'] ?? max(0, (float)($order['discount_amount'] ?? 0) - $promotionDiscount));
 ?>
 <div class="receipt-container" id="thermal-receipt-area">
     <!-- Header / Brand -->
@@ -77,6 +79,12 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
                     if (!empty($item['notes'])) {
                         echo '<div class="text-[10px] italic text-stone-500">Note: ' . e($item['notes']) . '</div>';
                     }
+                    if ((float)($item['promotion_discount'] ?? 0) > 0) {
+                        echo '<div class="text-[10px] text-emerald-700">Promotion Discount: -' . number_format($item['promotion_discount'], 2) . '</div>';
+                    }
+                    if ((float)($item['normal_discount'] ?? 0) > 0) {
+                        echo '<div class="text-[10px] text-stone-600">Normal Discount: -' . number_format($item['normal_discount'], 2) . '</div>';
+                    }
                     ?>
                 </td>
                 <td class="py-1.5 text-center align-top"><?= (int)$item['quantity'] ?></td>
@@ -95,10 +103,22 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
             <span>Subtotal:</span>
             <span> <?= number_format($order['subtotal'], 2) ?></span>
         </div>
-        <?php if ($order['discount_amount'] > 0): ?>
+        <?php if ($promotionDiscount > 0): ?>
+        <div class="flex justify-between text-emerald-700">
+            <span>Promotion Discount:</span>
+            <span>-<?= number_format($promotionDiscount, 2) ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($normalDiscount > 0): ?>
         <div class="flex justify-between text-stone-700">
-            <span>Discount:</span>
-            <span><?= number_format($order['discount_amount'], 2) ?></span>
+            <span>Normal Discount:</span>
+            <span>-<?= number_format($normalDiscount, 2) ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if (($promotionDiscount + $normalDiscount) > 0): ?>
+        <div class="flex justify-between font-bold">
+            <span>Total Discount:</span>
+            <span>-<?= number_format($promotionDiscount + $normalDiscount, 2) ?></span>
         </div>
         <?php endif; ?>
         <?php if ($order['paid_amount'] > 0): ?>
@@ -110,6 +130,11 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
     
 
         <div class="receipt-divider"></div>
+
+        <div class="flex justify-between text-sm font-black pt-0.5">
+            <span>Total:</span>
+            <span><?= number_format($order['grand_total'], 2) ?></span>
+        </div>
 
         <div class="flex justify-between text-sm font-black pt-0.5">
             <span>Balance:</span>
