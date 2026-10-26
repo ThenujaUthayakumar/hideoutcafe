@@ -4,6 +4,7 @@
  */
 require_once __DIR__ . '/config/functions.php';
 requireRole([ROLE_ADMIN]);
+ensureUserUsernameSchema();
 
 $title = 'Staff & Users';
 
@@ -13,23 +14,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'save_user') {
         $userId = !empty($_POST['user_id']) ? (int)$_POST['user_id'] : null;
         $name = sanitize($_POST['name']);
+        $username = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', sanitize($_POST['username'] ?? '')));
         $email = sanitize($_POST['email']);
         $role = sanitize($_POST['role'] ?? ROLE_CASHIER);
         $phone = sanitize($_POST['phone'] ?? '');
         $status = sanitize($_POST['status'] ?? 'active');
         $password = $_POST['password'] ?? '';
 
+        if (empty($username)) {
+            setFlash('error', 'Username is required.');
+            header("Location: " . BASE_URL . "/users.php");
+            exit;
+        }
+        $duplicate = db()->fetchOne(
+            "SELECT id FROM users WHERE username = :username AND id != :id LIMIT 1",
+            [':username' => $username, ':id' => $userId ?? 0]
+        );
+        if ($duplicate) {
+            setFlash('error', 'That username is already used by another account.');
+            header("Location: " . BASE_URL . "/users.php");
+            exit;
+        }
+
         if ($userId) {
             if (!empty($password)) {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 db()->query(
-                    "UPDATE users SET name = :name, email = :email, role = :role, phone = :phone, status = :st, password = :pass WHERE id = :id",
-                    [':name' => $name, ':email' => $email, ':role' => $role, ':phone' => $phone, ':st' => $status, ':pass' => $hash, ':id' => $userId]
+                    "UPDATE users SET name = :name, username = :username, email = :email, role = :role, phone = :phone, status = :st, password = :pass WHERE id = :id",
+                    [':name' => $name, ':username' => $username, ':email' => $email, ':role' => $role, ':phone' => $phone, ':st' => $status, ':pass' => $hash, ':id' => $userId]
                 );
             } else {
                 db()->query(
-                    "UPDATE users SET name = :name, email = :email, role = :role, phone = :phone, status = :st WHERE id = :id",
-                    [':name' => $name, ':email' => $email, ':role' => $role, ':phone' => $phone, ':st' => $status, ':id' => $userId]
+                    "UPDATE users SET name = :name, username = :username, email = :email, role = :role, phone = :phone, status = :st WHERE id = :id",
+                    [':name' => $name, ':username' => $username, ':email' => $email, ':role' => $role, ':phone' => $phone, ':st' => $status, ':id' => $userId]
                 );
             }
             setFlash('success', "Staff member '{$name}' updated.");
@@ -37,8 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($password)) $password = 'password123';
             $hash = password_hash($password, PASSWORD_DEFAULT);
             db()->query(
-                "INSERT INTO users (name, email, password, role, phone, status) VALUES (:name, :email, :pass, :role, :phone, :st)",
-                [':name' => $name, ':email' => $email, ':pass' => $hash, ':role' => $role, ':phone' => $phone, ':st' => $status]
+                "INSERT INTO users (name, username, email, password, role, phone, status) VALUES (:name, :username, :email, :pass, :role, :phone, :st)",
+                [':name' => $name, ':username' => $username, ':email' => $email, ':pass' => $hash, ':role' => $role, ':phone' => $phone, ':st' => $status]
             );
             setFlash('success', "New staff member '{$name}' registered.");
         }
@@ -85,6 +102,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     <thead class="bg-stone-900 text-stone-400 font-bold uppercase text-[10px] tracking-wider border-b border-stone-700">
                         <tr>
                             <th class="p-3.5">Staff Name</th>
+                            <th class="p-3.5">Username</th>
                             <th class="p-3.5">Email Address</th>
                             <th class="p-3.5">Assigned Role</th>
                             <th class="p-3.5">Phone Number</th>
@@ -101,6 +119,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                                 </div>
                                 <span><?= e($u['name']) ?></span>
                             </td>
+                            <td class="p-3.5 font-medium text-stone-300"><?= e($u['username'] ?? '') ?></td>
                             <td class="p-3.5 font-medium text-stone-300"><?= e($u['email']) ?></td>
                             <td class="p-3.5">
                                 <?php
@@ -159,6 +178,10 @@ require_once __DIR__ . '/includes/sidebar.php';
                 <input type="text" name="name" id="staff_form_name" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
             </div>
             <div>
+                <label class="block text-xs font-bold text-stone-700 mb-1">Username *</label>
+                <input type="text" name="username" id="staff_form_username" required pattern="[A-Za-z0-9_]+" class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
+            </div>
+            <div>
                 <label class="block text-xs font-bold text-stone-700 mb-1">Email Address *</label>
                 <input type="email" name="email" id="staff_form_email" required class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs">
             </div>
@@ -201,6 +224,7 @@ function openStaffModal() {
   document.getElementById('staff-modal-title').textContent = 'Add Staff Member';
   document.getElementById('staff_form_id').value = '';
   document.getElementById('staff_form_name').value = '';
+    document.getElementById('staff_form_username').value = '';
   document.getElementById('staff_form_email').value = '';
   document.getElementById('staff_form_role').value = 'cashier';
   document.getElementById('staff_form_phone').value = '';
@@ -212,6 +236,7 @@ function editStaff(u) {
   document.getElementById('staff-modal-title').textContent = 'Edit Staff: ' + u.name;
   document.getElementById('staff_form_id').value = u.id;
   document.getElementById('staff_form_name').value = u.name;
+    document.getElementById('staff_form_username').value = u.username || '';
   document.getElementById('staff_form_email').value = u.email;
   document.getElementById('staff_form_role').value = u.role;
   document.getElementById('staff_form_status').value = u.status;

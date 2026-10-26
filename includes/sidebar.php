@@ -54,6 +54,12 @@ $page = basename($_SERVER['PHP_SELF'], '.php');
                     <i class="fa-solid fa-tags text-sm w-5 <?= $page === 'categories' ? 'text-white' : 'text-stone-500' ?>"></i>
                     <span>Categories</span>
                 </a>
+                <?php if (hasRole([ROLE_ADMIN])): ?>
+                <a href="<?= BASE_URL ?>/promotions.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'promotions' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
+                    <i class="fa-solid fa-bullhorn text-sm w-5 <?= $page === 'promotions' ? 'text-white' : 'text-stone-500' ?>"></i>
+                    <span>Promotions</span>
+                </a>
+                <?php endif; ?>
 <!-- 
                 <a href="<?= BASE_URL ?>/modifiers.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'modifiers' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-wand-magic-sparkles text-sm w-5 <?= $page === 'modifiers' ? 'text-white' : 'text-stone-500' ?>"></i>
@@ -108,6 +114,11 @@ $page = basename($_SERVER['PHP_SELF'], '.php');
                 <a href="<?= BASE_URL ?>/settings.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'settings' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-gear text-sm w-5 <?= $page === 'settings' ? 'text-white' : 'text-stone-500' ?>"></i>
                     <span>Store Settings</span>
+                </a>
+
+                <a href="<?= BASE_URL ?>/feedback.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'feedback' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
+                    <i class="fa-solid fa-comments text-sm w-5 <?= $page === 'feedback' ? 'text-white' : 'text-stone-500' ?>"></i>
+                    <span>Website Feedback</span>
                 </a>
             </div>
         </div>

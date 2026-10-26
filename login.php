@@ -3,6 +3,7 @@
  * The Hide Out Cafe - User Authentication (Black & Red Theme)
  */
 require_once __DIR__ . '/config/functions.php';
+ensureUserUsernameSchema();
 
 if (isLoggedIn()) {
     $user = currentUser();
@@ -21,16 +22,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verify_csrf()) {
         $error = 'Invalid security token. Please refresh and try again.';
     } else {
-        $email = sanitize($_POST['email'] ?? '');
+        $identifier = sanitize($_POST['identifier'] ?? '');
         $password = $_POST['password'] ?? '';
 
-        if (empty($email) || empty($password)) {
-            $error = 'Please enter both email and password.';
+        if (empty($identifier) || empty($password)) {
+            $error = 'Please enter your username or email and password.';
         } else {
             try {
-                $user = db()->fetchOne("SELECT * FROM users WHERE email = :email LIMIT 1", [':email' => $email]);
+                $matchingUsers = db()->fetchAll(
+                    "SELECT * FROM users WHERE username = :username OR email = :email",
+                    [':username' => $identifier, ':email' => $identifier]
+                );
+                $user = null;
+                foreach ($matchingUsers as $matchingUser) {
+                    if ($matchingUser['status'] === 'active' && password_verify($password, $matchingUser['password'])) {
+                        $user = $matchingUser;
+                        break;
+                    }
+                }
                 
-                if ($user && $user['status'] === 'active' && password_verify($password, $user['password'])) {
+                if ($user) {
                     $openShift = getOpenCashRegister();
                     if (
                         $user['role'] === ROLE_CASHIER
@@ -114,12 +125,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?= csrf_field() ?>
 
                 <div>
-                    <label class="block text-xs font-bold text-stone-300 mb-1.5">Email Address</label>
+                    <label class="block text-xs font-bold text-stone-300 mb-1.5">Username or Email</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-stone-500 pointer-events-none">
                             <i class="fa-solid fa-envelope text-sm"></i>
                         </span>
-                        <input type="email" name="email" id="login_email" required value="admin@cafepos.com" 
+                        <input type="text" name="identifier" id="login_identifier" required value="admin"
                                class="w-full pl-10 pr-4 py-3 bg-stone-800/80 border border-stone-700 rounded-xl text-white text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition placeholder-stone-500">
                     </div>
                 </div>
@@ -139,6 +150,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <i class="fa-solid fa-right-to-bracket mr-2"></i> Access Terminal
                 </button>
             </form>
+
+            <a href="forgot_password.php" class="block text-center mt-4 text-xs font-bold text-red-400 hover:text-red-300">Admin: reset a staff password</a>
 
             <!-- Quick Demo Switcher -->
             <div class="mt-6 pt-5 border-t border-stone-800">
@@ -168,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <script>
       function fillCreds(email, pass) {
-        document.getElementById('login_email').value = email;
+                document.getElementById('login_identifier').value = email;
         document.getElementById('login_password').value = pass;
       }
     </script>

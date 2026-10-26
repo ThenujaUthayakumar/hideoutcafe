@@ -196,6 +196,117 @@ function ensureCustomerDobSchema(): void {
     }
 }
 
+function ensureUserUsernameSchema(): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+
+    try {
+        $columns = db()->fetchAll("SHOW COLUMNS FROM users");
+        $existing = array_column($columns, 'Field');
+        if (!in_array('username', $existing, true)) {
+            db()->query("ALTER TABLE users ADD COLUMN username VARCHAR(50) NULL AFTER name");
+        }
+        $emailIndex = db()->fetchOne("SHOW INDEX FROM users WHERE Column_name = 'email' AND Non_unique = 0");
+        if ($emailIndex) {
+            db()->query("ALTER TABLE users DROP INDEX `{$emailIndex['Key_name']}`");
+        }
+
+        $users = db()->fetchAll("SELECT id, email FROM users WHERE username IS NULL OR username = ''");
+        foreach ($users as $user) {
+            $base = strtolower((string)preg_replace('/[^a-zA-Z0-9_]/', '', (string)strstr($user['email'], '@', true)));
+            $base = substr($base ?: 'user', 0, 44);
+            $username = $base;
+            $suffix = 1;
+            while (db()->fetchOne("SELECT id FROM users WHERE username = :username AND id != :id LIMIT 1", [':username' => $username, ':id' => $user['id']])) {
+                $username = $base . $suffix++;
+            }
+            db()->query("UPDATE users SET username = :username WHERE id = :id", [':username' => $username, ':id' => $user['id']]);
+        }
+        $usernameIndex = db()->fetchOne("SHOW INDEX FROM users WHERE Column_name = 'username' AND Non_unique = 0");
+        if (!$usernameIndex) {
+            db()->query("ALTER TABLE users MODIFY username VARCHAR(50) NOT NULL");
+            db()->query("ALTER TABLE users ADD UNIQUE KEY `uq_users_username` (username)");
+        }
+    } catch (Exception $e) {
+        // The schema files remain the source of truth for fresh installations.
+    }
+}
+
+function ensurePromotionsSchema(): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        db()->query(
+            "CREATE TABLE IF NOT EXISTS promotions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(150) NOT NULL,
+                promotion_type ENUM('percentage', 'fixed', 'bogo', 'buy_x_get_y', 'combo', 'happy_hour', 'day_based', 'loyalty', 'first_order', 'minimum_spend') NOT NULL DEFAULT 'percentage',
+                discount_type ENUM('percentage', 'fixed') NOT NULL DEFAULT 'percentage',
+                discount_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                buy_quantity INT NOT NULL DEFAULT 1,
+                get_quantity INT NOT NULL DEFAULT 1,
+                minimum_spend DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                minimum_points DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                day_of_week TINYINT NULL,
+                start_at DATETIME NULL,
+                end_at DATETIME NULL,
+                status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+        $columns = db()->fetchAll('SHOW COLUMNS FROM promotions');
+        $existing = array_column($columns, 'Field');
+        $definitions = [
+            'promotion_type' => "ENUM('percentage', 'fixed', 'bogo', 'buy_x_get_y', 'combo', 'happy_hour', 'day_based', 'loyalty', 'first_order', 'minimum_spend') NOT NULL DEFAULT 'percentage'",
+            'buy_quantity' => 'INT NOT NULL DEFAULT 1',
+            'get_quantity' => 'INT NOT NULL DEFAULT 1',
+            'minimum_spend' => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
+            'minimum_points' => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
+            'day_of_week' => 'TINYINT NULL'
+        ];
+        foreach ($definitions as $column => $definition) {
+            if (!in_array($column, $existing, true)) {
+                db()->query("ALTER TABLE promotions ADD COLUMN `$column` $definition");
+            }
+        }
+    } catch (Exception $e) {
+        // The schema files remain the source of truth for fresh installations.
+    }
+}
+
+function getPromotionTypeLabel(string $type): string {
+    return [
+        'percentage' => 'Percentage Discount', 'fixed' => 'Fixed Amount Discount',
+        'bogo' => 'Buy One Get One', 'buy_x_get_y' => 'Buy X Get Y',
+        'combo' => 'Combo / Meal Deal', 'happy_hour' => 'Happy Hour',
+        'day_based' => 'Day-Based Promotion', 'loyalty' => 'Customer / Loyalty',
+        'first_order' => 'First Order / New Customer', 'minimum_spend' => 'Minimum Spend'
+    ][$type] ?? 'Promotion';
+}
+
+function getActivePromotionForProduct(array $product, ?int $timestamp = null): ?array {
+    return null;
+}
+
+function getActivePromotions(?int $timestamp = null): array {
+    ensurePromotionsSchema();
+    $now = date('Y-m-d H:i:s', $timestamp ?? time());
+    try {
+        return db()->fetchAll(
+            "SELECT * FROM promotions WHERE status = 'active'
+             AND (start_at IS NULL OR start_at <= :start_at)
+             AND (end_at IS NULL OR end_at >= :end_at)
+             AND (day_of_week IS NULL OR day_of_week = WEEKDAY(:day_check) + 1)
+             ORDER BY id DESC",
+            [':start_at' => $now, ':end_at' => $now, ':day_check' => $now]
+        );
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
 function ensureOrderDiscountSchema(): void {
     static $checked = false;
     if ($checked) return;
@@ -269,14 +380,13 @@ function renderPagination(int|string $page, int $total, int $perPage, array $par
 }
 
 function generateInvoiceNo(): string {
-    $prefix = getSettings('invoice_prefix') ?? 'HOC-';
-    $datePart = date('Ymd');
+    $datePart = date('ymd');
     try {
         $row = db()->fetchOne("SELECT COUNT(id) as total FROM orders WHERE DATE(created_at) = CURDATE()");
         $sequence = ($row['total'] ?? 0) + 1;
-        return $prefix . $datePart . '-' . str_pad((string)$sequence, 4, '0', STR_PAD_LEFT);
+        return $datePart . '-' . str_pad((string)$sequence, 3, '0', STR_PAD_LEFT);
     } catch (Exception $e) {
-        return $prefix . $datePart . '-' . rand(1000, 9999);
+        return $datePart . '-' . str_pad((string)rand(1, 999), 3, '0', STR_PAD_LEFT);
     }
 }
 

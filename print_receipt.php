@@ -7,6 +7,9 @@ requireAuth();
 
 $orderId = !empty($_GET['id']) ? (int)$_GET['id'] : 0;
 $autoPrint = !empty($_GET['auto_print']);
+$requestedCopy = $_GET['copy'] ?? 'all';
+$copy = in_array($requestedCopy, ['main', 'kitchen'], true) ? $requestedCopy : 'all';
+$printNextCopy = $copy === 'main' && !empty($_GET['print_next']);
 $currentUser = currentUser();
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
@@ -40,17 +43,24 @@ $order['items'] = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt <?= e($order['invoice_no']) ?></title>
+    <title><?= $copy === 'kitchen' ? 'Kitchen Copy' : ($copy === 'main' ? 'Main Bill' : 'Receipt') ?> <?= e($order['invoice_no']) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css">
 </head>
 <body class="bg-stone-100 flex flex-col items-center justify-center p-4">
 
+    <?php if ($copy === 'kitchen'): ?>
+    <div class="no-print mb-3 max-w-sm text-center text-xs text-stone-700">
+        <strong class="block text-sm text-stone-900">Kitchen copy is ready</strong>
+        Select the kitchen printer, then click Print Kitchen Copy.
+    </div>
+    <?php endif; ?>
+
     <!-- Print Button (Hidden during print) -->
     <div class="mb-4 flex gap-2 no-print">
-        <button onclick="window.print()" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md transition">
-            <i class="fa-solid fa-print mr-1.5"></i> Print Thermal Receipt
+        <button onclick="<?= $copy === 'all' ? "window.location.href='print_receipt.php?id={$orderId}&copy=main&print_next=1&auto_print=1'" : 'window.print()' ?>" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md transition">
+            <i class="fa-solid fa-print mr-1.5"></i> Print <?= $copy === 'kitchen' ? 'Kitchen Copy' : ($copy === 'main' ? 'Main Bill' : 'Both Bills') ?>
         </button>
         <button onclick="window.close()" class="px-4 py-2.5 bg-stone-200 text-stone-700 font-bold rounded-xl text-xs hover:bg-stone-300 transition">
             Close
@@ -59,11 +69,25 @@ $order['items'] = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id
 
     <!-- 80mm / 58mm Thermal Slip Content -->
     <div class="bg-white shadow-xl rounded-xl overflow-hidden">
-        <?php require __DIR__ . '/includes/receipt_template.php'; ?>
-<?php require __DIR__ . '/includes/kitchen_receipt_template.php'; ?>
+        <?php if ($copy === 'kitchen'): ?>
+            <?php require __DIR__ . '/includes/kitchen_receipt_template.php'; ?>
+        <?php elseif ($copy === 'main'): ?>
+            <?php require __DIR__ . '/includes/receipt_template.php'; ?>
+        <?php else: ?>
+            <?php require __DIR__ . '/includes/receipt_template.php'; ?>
+            <?php require __DIR__ . '/includes/kitchen_receipt_template.php'; ?>
+        <?php endif; ?>
     </div>
 
-    <?php if ($autoPrint): ?>
+        <?php if ($printNextCopy): ?>
+        <script>
+            window.addEventListener('afterprint', function() {
+                window.location.href = 'print_receipt.php?id=<?= $orderId ?>&copy=kitchen';
+            }, { once: true });
+        </script>
+        <?php endif; ?>
+
+        <?php if ($autoPrint): ?>
     <script>
       window.onload = function() {
         window.print();
