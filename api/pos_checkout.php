@@ -23,6 +23,7 @@ try {
     ensureProductDiscountSchema();
     ensureCustomerDobSchema();
     ensureOrderDiscountSchema();
+    ensurePromotionsSchema();
     $db = db();
     $db->beginTransaction();
 
@@ -40,13 +41,15 @@ try {
     $orderType     = sanitize($data['order_type'] ?? ORDER_DINE_IN);
     $tableId       = !empty($data['table_id']) ? (int)$data['table_id'] : null;
     $customerId    = !empty($data['customer_id']) ? (int)$data['customer_id'] : null;
+    $customer = $customerId ? $db->fetchOne("SELECT id, loyalty_points, created_at FROM customers WHERE id = :id", [':id' => $customerId]) : null;
+    $isFirstOrder = $customer && !(bool)$db->fetchOne("SELECT id FROM orders WHERE customer_id = :customer_id AND payment_status = 'paid' LIMIT 1", [':customer_id' => $customerId]);
     $paymentMethod = sanitize($data['payment_method'] ?? 'cash');
     $subtotal      = (float)($data['subtotal'] ?? 0);
     $discountAmt   = (float)($data['discount_amount'] ?? 0);
     $discountVal   = (float)($data['discount_value'] ?? 0);
     $discountType  = sanitize($data['discount_type'] ?? 'percentage');
-    $taxAmount     = (float)($data['tax_amount'] ?? 0);
-    $serviceCharge = (float)($data['service_charge'] ?? 0);
+    $taxAmount     = 0.0;
+    $serviceCharge = 0.0;
     $grandTotal    = (float)($data['grand_total'] ?? 0);
     $paidAmount    = (float)($data['paid_amount'] ?? $grandTotal);
     $changeAmount  = (float)($data['change_amount'] ?? 0);
@@ -56,6 +59,7 @@ try {
     $grossSubtotal = 0.0;
     $eligibleSubtotal = 0.0;
     $itemDiscounts = [];
+    $cartLines = [];
 
     // Insert Order Record
     $orderSql = "INSERT INTO orders (
@@ -152,13 +156,32 @@ try {
     $orderDiscountBase = max(0, $eligibleSubtotal);
     $orderDiscount = $discountType === 'percentage' ? ($orderDiscountBase * max(0, $discountVal)) / 100 : max(0, $discountVal);
     $orderDiscount = min($orderDiscountBase, $orderDiscount);
-    $discountAmt = $productDiscountAmount + $orderDiscount;
+    $promotionId = !empty($data['promotion_id']) ? (int)$data['promotion_id'] : 0;
+    $promotionDiscountAmount = 0.0;
+    if ($promotionId) {
+        $promotion = $db->fetchOne("SELECT * FROM promotions WHERE id = :id AND status = 'active' AND (start_at IS NULL OR start_at <= NOW()) AND (end_at IS NULL OR end_at >= NOW()) AND (day_of_week IS NULL OR day_of_week = WEEKDAY(NOW()) + 1)", [':id' => $promotionId]);
+        if ($promotion) {
+            $promotionQualifies = $promotion['promotion_type'] !== 'minimum_spend' || $grossSubtotal >= (float)$promotion['minimum_spend'];
+            if ($promotion['promotion_type'] === 'loyalty') $promotionQualifies = $customer && (float)$customer['loyalty_points'] >= (float)$promotion['minimum_points'];
+            if ($promotion['promotion_type'] === 'first_order') $promotionQualifies = (bool)$isFirstOrder;
+            if ($promotionQualifies) {
+                $promotionDiscountAmount = $promotion['discount_type'] === 'percentage' ? $orderDiscountBase * (float)$promotion['discount_value'] / 100 : (float)$promotion['discount_value'];
+                $promotionDiscountAmount = min($orderDiscountBase, max(0, $promotionDiscountAmount));
+            }
+        }
+    }
+    $discountAmt = $productDiscountAmount + $orderDiscount + $promotionDiscountAmount;
     $subtotal = $grossSubtotal;
-    $grandTotal = max(0, $grossSubtotal - $productDiscountAmount - $orderDiscount + $taxAmount + $serviceCharge);
+    $netSubtotal = max(0, $grossSubtotal - $productDiscountAmount - $orderDiscount - $promotionDiscountAmount);
+    $taxRate = max(0, (float)(getSettings('tax_rate') ?? 0));
+    $serviceChargeRate = max(0, (float)(getSettings('service_charge') ?? 0));
+    $taxAmount = $netSubtotal * $taxRate / 100;
+    $serviceCharge = $netSubtotal * $serviceChargeRate / 100;
+    $grandTotal = $netSubtotal + $taxAmount + $serviceCharge;
     $changeAmount = max(0, $paidAmount - $grandTotal);
     $db->query(
-        "UPDATE orders SET subtotal = :subtotal, discount_amount = :discount_amount, promotion_discount = :promotion_discount, normal_discount = :normal_discount, discount_percent = :discount_percent, grand_total = :grand_total, change_amount = :change_amount WHERE id = :order_id",
-        [':subtotal' => $subtotal, ':discount_amount' => $discountAmt, ':promotion_discount' => $productDiscountAmount, ':normal_discount' => $orderDiscount, ':discount_percent' => $discountType === 'percentage' ? max(0, $discountVal) : 0, ':grand_total' => $grandTotal, ':change_amount' => $changeAmount, ':order_id' => $orderId]
+        "UPDATE orders SET subtotal = :subtotal, discount_amount = :discount_amount, promotion_discount = :promotion_discount, normal_discount = :normal_discount, discount_percent = :discount_percent, tax_amount = :tax_amount, service_charge = :service_charge, grand_total = :grand_total, change_amount = :change_amount WHERE id = :order_id",
+        [':subtotal' => $subtotal, ':discount_amount' => $discountAmt, ':promotion_discount' => $productDiscountAmount + $promotionDiscountAmount, ':normal_discount' => $orderDiscount, ':discount_percent' => $discountType === 'percentage' ? max(0, $discountVal) : 0, ':tax_amount' => $taxAmount, ':service_charge' => $serviceCharge, ':grand_total' => $grandTotal, ':change_amount' => $changeAmount, ':order_id' => $orderId]
     );
     foreach ($itemDiscounts as $itemDiscount) {
         $normalLineDiscount = $eligibleSubtotal > 0 && $itemDiscount['promotion'] == 0

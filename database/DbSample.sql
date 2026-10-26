@@ -2,6 +2,7 @@ CREATE DATABASE IF NOT EXISTS `cafe_pos_db` DEFAULT CHARACTER SET utf8mb4 COLLAT
 USE `cafe_pos_db`;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS `promotions`;
 DROP TABLE IF EXISTS `product_discount_history`;
 DROP TABLE IF EXISTS `order_items`;
 DROP TABLE IF EXISTS `orders`;
@@ -22,7 +23,8 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE TABLE `users` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(100) NOT NULL,
-  `email` VARCHAR(100) NOT NULL UNIQUE,
+  `username` VARCHAR(50) NOT NULL UNIQUE,
+  `email` VARCHAR(100) NOT NULL,
   `password` VARCHAR(255) NOT NULL,
   `role` ENUM('admin', 'manager', 'cashier') NOT NULL DEFAULT 'cashier',
   `phone` VARCHAR(20) NULL,
@@ -30,11 +32,11 @@ CREATE TABLE `users` (
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `phone`, `status`) VALUES
-(1, 'Administrator', 'admin@cafepos.com', '$2y$10$8t4I1eFSUJpbhNjdMkTAHeIHk.leX5ReNgXZBWY4mXqHei44FPJ82', 'admin', '+94 77 123 4567', 'active'),
-(2, 'Sarah Manager', 'manager@cafepos.com', '$2y$10$0gIpwrdaY9EQSViyxizqNeHfqBsznnwe253PSmeaPgCh6uK/LplCW', 'manager', '+94 71 987 6543', 'active'),
-(3, 'Alex Cashier', 'cashier@cafepos.com', '$2y$10$JotmnJ0xQASLfpZ7yseX.erv4x6.fPUKPPz2theKSGeuP4/VC5kSy', 'cashier', '+94 76 555 1234', 'active'),
-(4, 'Liam Barista', 'barista@cafepos.com', '$2y$10$JotmnJ0xQASLfpZ7yseX.erv4x6.fPUKPPz2theKSGeuP4/VC5kSy', 'cashier', '+94 75 444 8899', 'active');
+INSERT INTO `users` (`id`, `name`, `username`, `email`, `password`, `role`, `phone`, `status`) VALUES
+(1, 'Administrator', 'admin', 'admin@cafepos.com', '$2y$10$8t4I1eFSUJpbhNjdMkTAHeIHk.leX5ReNgXZBWY4mXqHei44FPJ82', 'admin', '+94 77 123 4567', 'active'),
+(2, 'Sarah Manager', 'manager', 'manager@cafepos.com', '$2y$10$0gIpwrdaY9EQSViyxizqNeHfqBsznnwe253PSmeaPgCh6uK/LplCW', 'manager', '+94 71 987 6543', 'active'),
+(3, 'Alex Cashier', 'cashier', 'cashier@cafepos.com', '$2y$10$JotmnJ0xQASLfpZ7yseX.erv4x6.fPUKPPz2theKSGeuP4/VC5kSy', 'cashier', '+94 76 555 1234', 'active'),
+(4, 'Liam Barista', 'barista', 'barista@cafepos.com', '$2y$10$JotmnJ0xQASLfpZ7yseX.erv4x6.fPUKPPz2theKSGeuP4/VC5kSy', 'cashier', '+94 75 444 8899', 'active');
 
 -- Settings
 CREATE TABLE `settings` (
@@ -155,7 +157,7 @@ CREATE TABLE `orders` (
   `payment_status` ENUM('paid', 'unpaid', 'refunded') NOT NULL DEFAULT 'paid',
   `order_status` ENUM('pending', 'preparing', 'ready', 'completed', 'cancelled') NOT NULL DEFAULT 'completed',
   `notes` TEXT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   FOREIGN KEY (`table_id`) REFERENCES `tables`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`)
@@ -219,4 +221,21 @@ CREATE TABLE `product_discount_history` (
   `discount_end` DATETIME NULL,
   `recorded_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `promotions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(150) NOT NULL,
+  `promotion_type` ENUM('percentage', 'fixed', 'bogo', 'buy_x_get_y', 'combo', 'happy_hour', 'day_based', 'loyalty', 'first_order', 'minimum_spend') NOT NULL DEFAULT 'percentage',
+  `discount_type` ENUM('percentage', 'fixed') NOT NULL DEFAULT 'percentage',
+  `discount_value` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `buy_quantity` INT NOT NULL DEFAULT 1,
+  `get_quantity` INT NOT NULL DEFAULT 1,
+  `minimum_spend` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `minimum_points` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `day_of_week` TINYINT NULL,
+  `start_at` DATETIME NULL,
+  `end_at` DATETIME NULL,
+  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

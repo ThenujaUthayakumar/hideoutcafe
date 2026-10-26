@@ -11,6 +11,9 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
 $user = currentUser();
 ensureProductDiscountSchema();
 ensureCustomerDobSchema();
+ensurePromotionsSchema();
+$activePromotions = getActivePromotions();
+ensurePromotionsSchema();
 
 // Fetch Categories
 $categories = db()->fetchAll("SELECT * FROM categories WHERE status = 'active' ORDER BY sort_order ASC, name ASC");
@@ -42,7 +45,7 @@ foreach ($products as &$p) {
 // Fetch Modifiers, Tables, Customers
 $modifiers = db()->fetchAll("SELECT * FROM modifiers WHERE status = 'active' ORDER BY category ASC, name ASC");
 $tables = db()->fetchAll("SELECT * FROM tables ORDER BY table_number ASC");
-$customers = db()->fetchAll("SELECT id, name, phone, loyalty_points FROM customers ORDER BY id ASC LIMIT 50");
+$customers = db()->fetchAll("SELECT c.id, c.name, c.phone, c.loyalty_points, NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid') AS is_first_order FROM customers c ORDER BY c.id ASC LIMIT 50");
 
 $preselectedTableId = !empty($_GET['table_id']) ? (int)$_GET['table_id'] : null;
 $preselectedTableName = 'No Table';
@@ -59,8 +62,12 @@ require_once __DIR__ . '/includes/header.php';
 ?>
 <script>
   window.POS_MODIFIERS = <?= json_encode($modifiers) ?>;
+    window.POS_PROMOTIONS = [];
+    window.POS_ORDER_PROMOTIONS = <?= json_encode($activePromotions) ?>;
   window.POS_SETTINGS = {
-    currencySymbol: <?= json_encode($currency) ?>
+        currencySymbol: <?= json_encode($currency) ?>,
+        taxRate: <?= json_encode((float)($settings['tax_rate'] ?? 0)) ?>,
+        serviceChargeRate: <?= json_encode((float)($settings['service_charge'] ?? 0)) ?>
   };
 </script>
 <div class="flex-1 flex flex-col lg:flex-row overflow-hidden h-[calc(100vh-4rem)] bg-[#09090b]">
@@ -290,7 +297,7 @@ require_once __DIR__ . '/includes/header.php';
                 <input type="text" id="cust-search-input" oninput="searchCustomers(this.value)" placeholder="Search by name or phone..." class="w-full px-3.5 py-2.5 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white focus:bg-black focus:ring-2 focus:ring-red-600">
                 <div id="cust-search-results" class="space-y-2 max-h-60 overflow-y-auto">
                     <?php foreach ($customers as $c): ?>
-                    <div onclick="PosApp.selectCustomer({ id: <?= $c['id'] ?>, name: '<?= addslashes($c['name']) ?>', phone: '<?= e($c['phone']) ?>', points: <?= (float)$c['loyalty_points'] ?> })" class="flex items-center justify-between p-3 border border-stone-800 rounded-xl hover:border-red-600 hover:bg-stone-800/80 cursor-pointer transition">
+                    <div onclick="PosApp.selectCustomer({ id: <?= $c['id'] ?>, name: '<?= addslashes($c['name']) ?>', phone: '<?= e($c['phone']) ?>', points: <?= (float)$c['loyalty_points'] ?>, isFirstOrder: <?= $c['is_first_order'] ? 'true' : 'false' ?> })" class="flex items-center justify-between p-3 border border-stone-800 rounded-xl hover:border-red-600 hover:bg-stone-800/80 cursor-pointer transition">
                         <div>
                             <h4 class="font-bold text-xs text-white"><?= e($c['name']) ?></h4>
                             <p class="text-[11px] text-stone-400"><?= e($c['phone']) ?></p>
@@ -327,6 +334,15 @@ require_once __DIR__ . '/includes/header.php';
             <button onclick="closeModal('discount-modal')" class="text-stone-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="py-4 space-y-3">
+            <div>
+                <label class="block text-xs font-bold text-stone-300 mb-1">Standalone Promotion</label>
+                <select id="promotion_select" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                    <option value="">No promotion</option>
+                    <?php foreach ($activePromotions as $promotion): ?>
+                        <option value="<?= (int)$promotion['id'] ?>"><?= e($promotion['name']) ?> (<?= e($promotion['discount_type'] === 'fixed' ? $currency . ' ' . number_format($promotion['discount_value'], 2) : number_format($promotion['discount_value'], 2) . '%') ?>)</option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div>
                 <label class="block text-xs font-bold text-stone-300 mb-1">Discount Mode</label>
                 <select id="discount_type_select" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
@@ -397,7 +413,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- MODAL: THERMAL RECEIPT SUCCESS PREVIEW -->
-<div id="receipt-success-modal" class="modal-overlay fixed inset-0 bg-black/85 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+<div id="receipt-success-modal" data-order-id="" class="modal-overlay fixed inset-0 bg-black/85 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
     <div class="bg-stone-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-stone-800 flex flex-col">
         <div class="flex items-center justify-between pb-2 border-b border-stone-800">
             <div class="flex items-center gap-2">
@@ -411,8 +427,8 @@ require_once __DIR__ . '/includes/header.php';
         </div>
         <div class="pt-2 flex gap-2">
             <button onclick="closeModal('receipt-success-modal')" class="flex-1 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold rounded-xl text-xs">New Sale</button>
-            <button onclick="document.getElementById('thermal-receipt-frame').contentWindow.print()" class="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md">
-                <i class="fa-solid fa-print mr-1"></i> Print Receipt
+            <button onclick="PosApp.printReceiptDirect(document.getElementById('receipt-success-modal').dataset.orderId)" class="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md">
+                <i class="fa-solid fa-print mr-1"></i> Print Both Copies
             </button>
         </div>
     </div>
@@ -432,6 +448,18 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script>
+<script>
+    if (window.qz) {
+        qz.security.setCertificatePromise((resolve) => resolve());
+        qz.security.setSignaturePromise(() => (resolve) => resolve());
+    }
+
+    window.QZ_PRINT_SETTINGS = {
+        mainPrinter: 'XP-80C (copy 1)',
+        kitchenPrinter: 'XP-80C (copy 2)'
+    };
+</script>
 <script src="<?= BASE_URL ?>/assets/js/pos.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
@@ -454,6 +482,7 @@ require_once __DIR__ . '/includes/header.php';
   }
 
   function applyDiscountSettings() {
+        PosApp.state.promotionId = document.getElementById('promotion_select').value;
     PosApp.state.discountType = document.getElementById('discount_type_select').value;
     PosApp.state.discountValue = parseFloat(document.getElementById('discount_val_input').value) || 0;
     PosApp.renderCart();

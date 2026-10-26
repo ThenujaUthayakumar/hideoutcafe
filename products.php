@@ -59,10 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        db()->query(
-            "INSERT INTO product_discount_history (product_id, discount_type, discount_value, discount_start, discount_end) VALUES (:product_id, :discount_type, :discount_value, :discount_start, :discount_end)",
-            [':product_id' => $id, ':discount_type' => $discountType, ':discount_value' => $discountValue, ':discount_start' => $discountStart, ':discount_end' => $discountEnd]
-        );
+        if ($discountValue > 0) {
+            db()->query(
+                "INSERT INTO product_discount_history (product_id, discount_type, discount_value, discount_start, discount_end) VALUES (:product_id, :discount_type, :discount_value, :discount_start, :discount_end)",
+                [':product_id' => $id, ':discount_type' => $discountType, ':discount_value' => $discountValue, ':discount_start' => $discountStart, ':discount_end' => $discountEnd]
+            );
+        }
 
         header("Location: " . BASE_URL . "/products.php");
         exit;

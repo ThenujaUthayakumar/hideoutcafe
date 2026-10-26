@@ -17,9 +17,10 @@ error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 ini_set('display_errors', 0);
 
 // Application Constants
-define('APP_NAME', 'The Hide Out Cafe');
+define('APP_NAME', 'The Hide Out');
 define('APP_VERSION', '2.0.0');
 define('APP_TAGLINE', 'Artisan Coffee & Bistro - Sri Lanka');
+define('ADMIN_RESET_PASSCODE', 'AdminReset@2026');
 
 // Database Configuration
 define('DB_HOST', 'localhost');

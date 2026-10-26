@@ -11,6 +11,7 @@ const PosApp = {
     customer: null,
     discountType: 'percentage',
     discountValue: 0,
+    promotionId: '',
     currencySymbol: 'Rs.',
     activeCategoryId: 'all',
     searchQuery: '',
@@ -19,6 +20,8 @@ const PosApp = {
 
   init(settings = {}) {
     this.state.currencySymbol = settings.currencySymbol || 'Rs.';
+    this.state.taxRate = parseFloat(settings.taxRate) || 0;
+    this.state.serviceChargeRate = parseFloat(settings.serviceChargeRate) || 0;
     
     this.bindKeyboardShortcuts();
     this.renderCart();
@@ -117,6 +120,7 @@ const PosApp = {
       } else {
         this.addItemToCart({
           productId: product.id,
+          categoryId: product.category_id,
           name: product.name,
           variantName: null,
           unitPrice: parseFloat(product.price),
@@ -213,6 +217,7 @@ const PosApp = {
 
     this.addItemToCart({
       productId: product.id,
+      categoryId: product.category_id,
       name: product.name,
       variantName: variantName,
       unitPrice: basePrice,
@@ -277,6 +282,7 @@ const PosApp = {
   clearCart() {
     this.state.cart = [];
     this.state.discountValue = 0;
+    this.state.promotionId = '';
     this.state.tableId = null;
     this.state.tableName = 'No Table';
     this.state.customer = { id: 1, name: 'Walk-in Customer', phone: '0000000000', points: 0 };
@@ -362,15 +368,73 @@ getCalculations() {
   }
 
   orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
+  let ruleDiscount = 0;
+  (window.POS_PROMOTIONS || []).forEach(promotion => {
+    const type = promotion.promotion_type;
+    if (['minimum_spend', 'loyalty', 'first_order'].includes(type)) {
+      const qualifies = type === 'minimum_spend'
+        ? subtotal >= Number(promotion.minimum_spend || 0)
+        : type === 'loyalty'
+          ? this.state.customer && Number(this.state.customer.points || 0) >= Number(promotion.minimum_points || 0)
+          : this.state.customer && this.state.customer.isFirstOrder;
+      if (qualifies) {
+        const value = promotion.discount_type === 'percentage' ? eligibleSubtotal * Number(promotion.discount_value) / 100 : Number(promotion.discount_value);
+        ruleDiscount = Math.max(ruleDiscount, Math.min(eligibleSubtotal, value));
+      }
+    }
+    if (['bogo', 'buy_x_get_y'].includes(type) && (promotion.product_id || promotion.product_ids)) {
+      const triggerIds = String(promotion.product_ids || promotion.product_id).split(',').map(Number).filter(Boolean);
+      const trigger = this.state.cart.find(item => triggerIds.includes(Number(item.productId)));
+      if (trigger) {
+        const groups = Math.floor(trigger.quantity / (Number(promotion.buy_quantity || 1) + Number(promotion.get_quantity || 1)));
+        let freeQuantity = groups * Number(promotion.get_quantity || 1);
+        const rewardIds = String(promotion.reward_product_ids || promotion.reward_product_id || trigger.productId).split(',').map(Number).filter(Boolean);
+        rewardIds.forEach(rewardId => {
+          const reward = this.state.cart.find(item => Number(item.productId) === rewardId);
+          if (reward && freeQuantity > 0) {
+            const freeCount = Math.min(reward.quantity, freeQuantity);
+            ruleDiscount += freeCount * (Number(reward.unitPrice) || 0);
+            freeQuantity -= freeCount;
+          }
+        });
+      }
+    }
+    if (type === 'combo' && promotion.combo_product_ids) {
+      const ids = String(promotion.combo_product_ids).split(',').map(Number).filter(Boolean);
+      if (ids.length && ids.every(id => this.state.cart.some(item => Number(item.productId) === id))) {
+        const comboGross = ids.reduce((sum, id) => {
+          const item = this.state.cart.find(line => Number(line.productId) === id);
+          return sum + (Number(item.unitPrice) || 0);
+        }, 0);
+        ruleDiscount += Math.max(0, comboGross - Number(promotion.discount_value || 0));
+      }
+    }
+  });
+  const selectedPromotion = (window.POS_ORDER_PROMOTIONS || []).find(promotion => String(promotion.id) === String(this.state.promotionId));
+  if (selectedPromotion) {
+    const qualifies = selectedPromotion.promotion_type !== 'minimum_spend' || subtotal >= Number(selectedPromotion.minimum_spend || 0);
+    if (qualifies) {
+      const selectedDiscount = selectedPromotion.discount_type === 'percentage'
+        ? eligibleSubtotal * Number(selectedPromotion.discount_value || 0) / 100
+        : Number(selectedPromotion.discount_value || 0);
+      orderDiscount = Math.min(eligibleSubtotal, Math.max(0, selectedDiscount));
+    }
+  }
+  orderDiscount = Math.max(orderDiscount, Math.min(eligibleSubtotal, ruleDiscount));
   const discount = productDiscount + orderDiscount;
 
-  const grandTotal = Math.max(0, afterProductDiscount - orderDiscount);
+  const netSubtotal = Math.max(0, afterProductDiscount - orderDiscount);
+  const taxAmount = netSubtotal * (this.state.taxRate || 0) / 100;
+  const serviceCharge = netSubtotal * (this.state.serviceChargeRate || 0) / 100;
+  const grandTotal = netSubtotal + taxAmount + serviceCharge;
 
   return {
     subtotal,
     productDiscount,
     orderDiscount,
     discount,
+    taxAmount,
+    serviceCharge,
     grandTotal
   };
 },
@@ -543,9 +607,12 @@ getCalculations() {
       discount_type: this.state.discountType,
       discount_value: this.state.discountValue,
       discount_amount: calc.discount,
+      promotion_id: this.state.promotionId,
       promotion_discount: calc.productDiscount,
       normal_discount: calc.orderDiscount,
       subtotal: calc.subtotal,
+      tax_amount: calc.taxAmount,
+      service_charge: calc.serviceCharge,
       grand_total: calc.grandTotal,
       order_status: 'pending',
       notes: document.getElementById('pos-order-notes') ? document.getElementById('pos-order-notes').value : '',
@@ -587,6 +654,7 @@ getCalculations() {
         SoundFX.success();
         closeModal('pos-checkout-modal');
         this.showReceiptModal(data.order);
+        this.printReceiptDirect(data.order.id);
         this.clearCart();
       } else {
         Toast.error(data.message || 'Transaction failed');
@@ -606,16 +674,74 @@ getCalculations() {
 
   showReceiptModal(order) {
     const receiptFrame = document.getElementById('thermal-receipt-frame');
+    const receiptModal = document.getElementById('receipt-success-modal');
     if (receiptFrame) {
       receiptFrame.src = `print_receipt.php?id=${order.id}&embed=1`;
     }
+    if (receiptModal) receiptModal.dataset.orderId = order.id;
     document.getElementById('receipt-invoice-no').textContent = order.invoice_no;
     openModal('receipt-success-modal');
   },
 
   printReceiptDirect(orderId) {
-    const printWindow = window.open(`print_receipt.php?id=${orderId}&auto_print=1`, '_blank', 'width=400,height=600');
+    if (window.qz && window.QZ_PRINT_SETTINGS) {
+      this.printReceiptsToConfiguredPrinters(orderId).catch((error) => {
+        console.error('Direct printer error:', error);
+        Toast.error('Direct printing unavailable. Opening print dialogs instead.');
+        this.openReceiptPrintDialogs(orderId);
+      });
+      return;
+    }
+
+    this.openReceiptPrintDialogs(orderId);
+  },
+
+  openReceiptPrintDialogs(orderId) {
+    const printWindow = window.open(`print_receipt.php?id=${orderId}&copy=main&print_next=1&auto_print=1`, '_blank', 'width=400,height=600');
     if (printWindow) printWindow.focus();
+  },
+
+  async printReceiptsToConfiguredPrinters(orderId) {
+    if (!qz.websocket.isActive()) {
+      await qz.websocket.connect();
+    }
+
+    const printCopy = async (copy, printerName) => {
+      const receiptHtml = await this.loadReceiptDocument(orderId, copy);
+      const printerConfig = qz.configs.create(printerName);
+      await qz.print(printerConfig, [{
+        type: 'html',
+        format: 'plain',
+        data: receiptHtml
+      }]);
+    };
+
+    await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
+    await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
+    await qz.websocket.disconnect();
+    Toast.success('Main bill and kitchen copy sent to their printers.');
+  },
+
+  loadReceiptDocument(orderId, copy) {
+    return new Promise((resolve, reject) => {
+      const frame = document.createElement('iframe');
+      frame.hidden = true;
+      frame.src = `print_receipt.php?id=${encodeURIComponent(orderId)}&copy=${copy}&embed=1`;
+      frame.onload = () => {
+        try {
+          resolve(frame.contentDocument.documentElement.outerHTML);
+        } catch (error) {
+          reject(error);
+        } finally {
+          frame.remove();
+        }
+      };
+      frame.onerror = () => {
+        frame.remove();
+        reject(new Error(`Could not load ${copy} receipt`));
+      };
+      document.body.appendChild(frame);
+    });
   },
 
   async holdCurrentOrder() {
