@@ -101,11 +101,17 @@ $productSales = db()->fetchAll(
 
 // Cashier Performance in Range
 $cashierSales = db()->fetchAll(
-    "SELECT u.name as cashier_name, COUNT(o.id) as order_count, SUM(o.grand_total) as total_collected 
-     FROM orders o 
-     JOIN users u ON o.user_id = u.id 
-     WHERE DATE(o.created_at) BETWEEN :s AND :e AND o.payment_status = 'paid' AND o.order_status != 'cancelled'
-     GROUP BY u.id 
+    "SELECT 
+        u.id,
+        u.name AS cashier_name,
+        COUNT(o.id) AS order_count,
+        SUM(o.grand_total) AS total_collected
+     FROM orders o
+     JOIN users u ON o.user_id = u.id
+     WHERE DATE(o.created_at) BETWEEN :s AND :e
+       AND o.payment_status = 'paid'
+       AND o.order_status != 'cancelled'
+     GROUP BY u.id, u.name
      ORDER BY total_collected DESC",
     [':s' => $startDate, ':e' => $endDate]
 );
