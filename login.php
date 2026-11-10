@@ -154,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <a href="forgot_password.php" class="block text-center mt-4 text-xs font-bold text-red-400 hover:text-red-300">Admin: reset a staff password</a>
 
             <!-- Quick Demo Switcher -->
-            <div class="mt-6 pt-5 border-t border-stone-800">
+            <!-- <div class="mt-6 pt-5 border-t border-stone-800">
                 <p class="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2.5">1-Click Demo Login:</p>
                 <div class="grid grid-cols-3 gap-2">
                     <button type="button" onclick="fillCreds('admin@cafepos.com', 'admin123')" class="py-2 px-2 bg-stone-800/80 hover:bg-red-950/60 hover:border-red-600 border border-stone-700 rounded-xl text-center transition group">
@@ -170,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="text-[10px] text-stone-500">POS Sales</div>
                     </button>
                 </div>
-            </div>
+            </div> -->
 
         </div>
 

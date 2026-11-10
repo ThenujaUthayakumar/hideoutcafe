@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * The Hide Out Cafe - Application Configuration
  */
