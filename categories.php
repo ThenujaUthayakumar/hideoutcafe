@@ -44,7 +44,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$categories = db()->fetchAll("SELECT c.*, COUNT(p.id) as product_count FROM categories c LEFT JOIN products p ON c.id = p.category_id GROUP BY c.id ORDER BY c.sort_order ASC");
+$categories = db()->fetchAll("
+    SELECT
+        c.id,
+        c.name,
+        c.slug,
+        c.icon,
+        c.sort_order,
+        c.status,
+        COUNT(p.id) AS product_count
+    FROM categories c
+    LEFT JOIN products p ON c.id = p.category_id
+    GROUP BY
+        c.id,
+        c.name,
+        c.slug,
+        c.icon,
+        c.sort_order,
+        c.status
+    ORDER BY c.sort_order ASC
+");
 
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';

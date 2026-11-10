@@ -116,7 +116,7 @@ $page = basename($_SERVER['PHP_SELF'], '.php');
                     <span>Store Settings</span>
                 </a>
 
-                <a href="<?= BASE_URL ?>/feedback.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'feedback' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
+                <a href="<?= BASE_URL ?>/website-feedback.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'feedback' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-comments text-sm w-5 <?= $page === 'feedback' ? 'text-white' : 'text-stone-500' ?>"></i>
                     <span>Website Feedback</span>
                 </a>
