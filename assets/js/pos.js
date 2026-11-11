@@ -687,7 +687,16 @@ getCalculations() {
     if (window.qz && window.QZ_PRINT_SETTINGS) {
       this.printReceiptsToConfiguredPrinters(orderId).catch((error) => {
         console.error('Direct printer error:', error);
-        Toast.error('Direct printing unavailable. Opening print dialogs instead.');
+        const message = (error instanceof Error ? error.message : String(error))
+          .slice(0, 200)
+          .replace(/[&<>"']/g, (character) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+          })[character]);
+        Toast.error(`QZ direct print failed: ${message}. Opening browser print dialogs.`);
         this.openReceiptPrintDialogs(orderId);
       });
       return;
