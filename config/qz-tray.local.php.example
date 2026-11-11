@@ -1,8 +1,0 @@
-<?php
-
-return [
-    // Use absolute paths outside public_html. Replace CPANEL_USER with your cPanel account name.
-    'certificate_path' => '/home/CPANEL_USER/qz-tray/digital-certificate.txt',
-    'private_key_path' => '/home/CPANEL_USER/qz-tray/private-key.pem',
-    'private_key_passphrase' => '',
-];
