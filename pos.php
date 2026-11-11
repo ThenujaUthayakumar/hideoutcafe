@@ -476,8 +476,8 @@ require_once __DIR__ . '/includes/header.php';
     }
 
     window.QZ_PRINT_SETTINGS = {
-        mainPrinter: 'XP-80C (copy 1)',
-        kitchenPrinter: 'XP-80C (copy 2)'
+        mainPrinter: 'Cashier',
+        kitchenPrinter: 'Kitchen'
     };
 </script>
 <script src="<?= BASE_URL ?>/assets/js/pos.js"></script>
