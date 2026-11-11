@@ -734,36 +734,52 @@ getCalculations() {
   loadReceiptDocument(orderId, copy) {
     return new Promise((resolve, reject) => {
       const frame = document.createElement('iframe');
-      frame.hidden = true;
+      frame.style.position = 'fixed';
+      frame.style.left = '-10000px';
+      frame.style.width = '80mm';
+      frame.style.height = '1000px';
+      frame.style.border = '0';
       frame.src = `print_receipt.php?id=${encodeURIComponent(orderId)}&copy=${copy}&embed=1`;
       frame.onload = () => {
         try {
           const document = frame.contentDocument;
+          if (!document) {
+            throw new Error(`Could not read ${copy} receipt content`);
+          }
+
           const receiptId = copy === 'kitchen' ? 'thermal-receipt-area-kitchen' : 'thermal-receipt-area';
           const receipt = document.getElementById(receiptId);
           if (!receipt) {
             throw new Error(`Could not find ${copy} receipt content`);
           }
 
-          const resources = Array.from(document.head.children)
-            .filter((element) => element.tagName === 'LINK'
-              || element.tagName === 'STYLE'
-              || (element.tagName === 'SCRIPT' && element.src.includes('tailwindcss')))
-            .map((element) => element.outerHTML)
-            .join('\n');
+          const inlineComputedStyles = (source, target) => {
+            const computed = document.defaultView.getComputedStyle(source);
+            for (let index = 0; index < computed.length; index += 1) {
+              const property = computed[index];
+              if (!property.startsWith('--')) {
+                target.style.setProperty(property, computed.getPropertyValue(property));
+              }
+            }
 
+            Array.from(source.children).forEach((child, index) => {
+              inlineComputedStyles(child, target.children[index]);
+            });
+          };
+
+          const receiptCopy = receipt.cloneNode(true);
+          inlineComputedStyles(receipt, receiptCopy);
           resolve(`<!doctype html>
             <html lang="en">
               <head>
                 <meta charset="UTF-8">
-                ${resources}
                 <style>
                   @page { size: 80mm auto; margin: 0; }
                   html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
                   body { display: block; }
                 </style>
               </head>
-              <body>${receipt.outerHTML}</body>
+              <body>${receiptCopy.outerHTML}</body>
             </html>`);
         } catch (error) {
           reject(error);
