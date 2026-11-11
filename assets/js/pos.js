@@ -738,7 +738,46 @@ getCalculations() {
       frame.src = `print_receipt.php?id=${encodeURIComponent(orderId)}&copy=${copy}&embed=1`;
       frame.onload = () => {
         try {
-          resolve(frame.contentDocument.documentElement.outerHTML);
+          const document = frame.contentDocument;
+          const receiptId = copy === 'kitchen' ? 'thermal-receipt-area-kitchen' : 'thermal-receipt-area';
+          const receipt = document.getElementById(receiptId);
+          if (!receipt) {
+            throw new Error(`Could not find ${copy} receipt content`);
+          }
+
+          const resources = Array.from(document.head.children)
+            .filter((element) => element.tagName === 'LINK'
+              || element.tagName === 'STYLE'
+              || (element.tagName === 'SCRIPT' && element.src.includes('tailwindcss')))
+            .map((element) => element.outerHTML)
+            .join('\n');
+
+          resolve(`<!doctype html>
+            <html lang="en">
+              <head>
+                <meta charset="UTF-8">
+                ${resources}
+                <style>
+                  @page { size: 80mm auto; margin: 0; }
+                  html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
+                  body { display: block; }
+                  .receipt-container {
+                    width: 80mm;
+                    max-width: 80mm;
+                    margin: 0;
+                    padding: 1mm 2mm;
+                    box-sizing: border-box;
+                    border: 0;
+                    font-family: "Courier New", Courier, monospace;
+                    font-size: 12px;
+                    line-height: 1.25;
+                    color: #000;
+                    background: #fff;
+                  }
+                </style>
+              </head>
+              <body>${receipt.outerHTML}</body>
+            </html>`);
         } catch (error) {
           reject(error);
         } finally {
