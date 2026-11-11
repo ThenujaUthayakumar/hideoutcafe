@@ -761,19 +761,6 @@ getCalculations() {
                   @page { size: 80mm auto; margin: 0; }
                   html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
                   body { display: block; }
-                  .receipt-container {
-                    width: 80mm;
-                    max-width: 80mm;
-                    margin: 0;
-                    padding: 1mm 2mm;
-                    box-sizing: border-box;
-                    border: 0;
-                    font-family: "Courier New", Courier, monospace;
-                    font-size: 12px;
-                    line-height: 1.25;
-                    color: #000;
-                    background: #fff;
-                  }
                 </style>
               </head>
               <body>${receipt.outerHTML}</body>
