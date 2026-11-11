@@ -717,10 +717,7 @@ getCalculations() {
 
     const printCopy = async (copy, printerName) => {
       const receiptHtml = await this.loadReceiptDocument(orderId, copy);
-      const printerConfig = qz.configs.create(printerName, {
-        scaleContent: false,
-        margins: 0
-      });
+      const printerConfig = qz.configs.create(printerName);
       await qz.print(printerConfig, [{
         type: 'html',
         format: 'plain',
@@ -737,45 +734,11 @@ getCalculations() {
   loadReceiptDocument(orderId, copy) {
     return new Promise((resolve, reject) => {
       const frame = document.createElement('iframe');
-      frame.style.position = 'fixed';
-      frame.style.left = '-10000px';
-      frame.style.width = '80mm';
-      frame.style.height = '1000px';
-      frame.style.border = '0';
+      frame.hidden = true;
       frame.src = `print_receipt.php?id=${encodeURIComponent(orderId)}&copy=${copy}&embed=1`;
       frame.onload = () => {
         try {
-          const document = frame.contentDocument;
-          if (!document) {
-            throw new Error(`Could not read ${copy} receipt content`);
-          }
-
-          const receiptId = copy === 'kitchen' ? 'thermal-receipt-area-kitchen' : 'thermal-receipt-area';
-          const receipt = document.getElementById(receiptId);
-          if (!receipt) {
-            throw new Error(`Could not find ${copy} receipt content`);
-          }
-
-          const resources = Array.from(document.head.children)
-            .filter((element) => element.tagName === 'LINK'
-              || element.tagName === 'STYLE'
-              || (element.tagName === 'SCRIPT' && element.src.includes('tailwindcss')))
-            .map((element) => element.outerHTML)
-            .join('\n');
-
-          resolve(`<!doctype html>
-            <html lang="en">
-              <head>
-                <meta charset="UTF-8">
-                ${resources}
-                <style>
-                  @page { size: 80mm auto; margin: 0; }
-                  html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
-                  body { display: block; }
-                </style>
-              </head>
-              <body>${receipt.outerHTML}</body>
-            </html>`);
+          resolve(frame.contentDocument.documentElement.outerHTML);
         } catch (error) {
           reject(error);
         } finally {
