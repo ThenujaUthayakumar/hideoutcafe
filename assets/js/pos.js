@@ -717,7 +717,10 @@ getCalculations() {
 
     const printCopy = async (copy, printerName) => {
       const receiptHtml = await this.loadReceiptDocument(orderId, copy);
-      const printerConfig = qz.configs.create(printerName);
+      const printerConfig = qz.configs.create(printerName, {
+        scaleContent: false,
+        margins: 0
+      });
       await qz.print(printerConfig, [{
         type: 'html',
         format: 'plain',
@@ -753,33 +756,25 @@ getCalculations() {
             throw new Error(`Could not find ${copy} receipt content`);
           }
 
-          const inlineComputedStyles = (source, target) => {
-            const computed = document.defaultView.getComputedStyle(source);
-            for (let index = 0; index < computed.length; index += 1) {
-              const property = computed[index];
-              if (!property.startsWith('--')) {
-                target.style.setProperty(property, computed.getPropertyValue(property));
-              }
-            }
+          const resources = Array.from(document.head.children)
+            .filter((element) => element.tagName === 'LINK'
+              || element.tagName === 'STYLE'
+              || (element.tagName === 'SCRIPT' && element.src.includes('tailwindcss')))
+            .map((element) => element.outerHTML)
+            .join('\n');
 
-            Array.from(source.children).forEach((child, index) => {
-              inlineComputedStyles(child, target.children[index]);
-            });
-          };
-
-          const receiptCopy = receipt.cloneNode(true);
-          inlineComputedStyles(receipt, receiptCopy);
           resolve(`<!doctype html>
             <html lang="en">
               <head>
                 <meta charset="UTF-8">
+                ${resources}
                 <style>
                   @page { size: 80mm auto; margin: 0; }
                   html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
                   body { display: block; }
                 </style>
               </head>
-              <body>${receiptCopy.outerHTML}</body>
+              <body>${receipt.outerHTML}</body>
             </html>`);
         } catch (error) {
           reject(error);

@@ -182,7 +182,6 @@ body {
 .receipt-container {
   width: 80mm;
   max-width: 100%;
-  box-sizing: border-box;
   margin: 0 auto;
   padding: 8px 8px;
   background: #ffffff;
