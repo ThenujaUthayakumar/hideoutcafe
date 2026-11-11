@@ -451,8 +451,28 @@ require_once __DIR__ . '/includes/header.php';
 <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script>
 <script>
     if (window.qz) {
-        qz.security.setCertificatePromise((resolve) => resolve());
-        qz.security.setSignaturePromise(() => (resolve) => resolve());
+        qz.security.setCertificatePromise((resolve, reject) => {
+            fetch('<?= BASE_URL ?>/api/qz_certificate.php', { cache: 'no-store' })
+                .then(async (response) => {
+                    if (!response.ok) throw new Error(await response.text());
+                    resolve(await response.text());
+                })
+                .catch(reject);
+        });
+        qz.security.setSignatureAlgorithm('SHA512');
+        qz.security.setSignaturePromise((toSign) => (resolve, reject) => {
+            fetch('<?= BASE_URL ?>/api/qz_sign.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ request: toSign }),
+                cache: 'no-store'
+            })
+                .then(async (response) => {
+                    if (!response.ok) throw new Error(await response.text());
+                    resolve(await response.text());
+                })
+                .catch(reject);
+        });
     }
 
     window.QZ_PRINT_SETTINGS = {

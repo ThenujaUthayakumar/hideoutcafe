@@ -85,6 +85,17 @@ Then visit: `http://localhost:8000` in your web browser.
 
 ---
 
+### 5. QZ Tray Silent Printing (Production)
+QZ Tray requires signed requests to trust a website and suppress print approval dialogs. Obtain a QZ Tray signing certificate and matching private key. A demo certificate created in QZ Tray's Site Manager is specific to that computer; production deployments need a certificate trusted by QZ Tray on each cashier computer.
+
+For cPanel, create a directory outside `public_html` (for example `/home/CPANEL_USER/qz-tray/`) and place both files there. Copy `config/qz-tray.local.php.example` to `config/qz-tray.local.php`, replace `CPANEL_USER` with your cPanel account name, and enter the actual absolute file paths. Set the private-key passphrase there only if the key is encrypted. The local file is git-ignored; do not commit it. Environment variables `QZ_CERTIFICATE_PATH`, `QZ_PRIVATE_KEY_PATH`, and `QZ_PRIVATE_KEY_PASSPHRASE` can be used instead and take precedence.
+
+The web server must be able to read both files, and PHP must have the OpenSSL extension enabled. Never place the private key in `public_html`, the repository, or a public URL. The POS reads the certificate and requests signatures from authenticated PHP endpoints in `api/`.
+
+Install/trust the matching certificate in QZ Tray on each cashier computer, configure the exact installed printer names in `pos.php`, and ensure QZ Tray is running there. Use HTTPS in production. Until the matching certificate and key are acquired and configured, direct printing will fail and the POS will offer the browser print-dialog fallback.
+
+---
+
 ## Default Login Credentials
 
 | Role | Email | Password | Access Level |
