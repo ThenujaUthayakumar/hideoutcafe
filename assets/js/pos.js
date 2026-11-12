@@ -285,7 +285,8 @@ const PosApp = {
     this.state.promotionId = '';
     this.state.tableId = null;
     this.state.tableName = 'No Table';
-    this.state.customer = { id: 1, name: 'Walk-in Customer', phone: '0000000000', points: 0 };
+    this.state.customer = null;
+    //this.state.customer = { id: 1, name: 'Walk-in Customer', phone: '0000000000', points: 0 };
     this.renderCart();
   },
 
