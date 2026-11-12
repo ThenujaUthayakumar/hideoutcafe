@@ -37,23 +37,23 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
     <div class="receipt-divider"></div>
 
     <!-- Items Table -->
-    <table class="w-full text-xs text-left my-1">
+    <table class="receipt-items receipt-items-kitchen">
         <thead>
-            <tr class="border-b border-stone-800 pb-1">
-                <th class="py-0.5 font-normal">DESCRIPTION</th>
-                <th class="py-0.5 text-center font-normal">QTY</th>
+            <tr>
+                <th class="receipt-item-description">DESCRIPTION</th>
+                <th class="receipt-item-qty">QTY</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($order['items'] as $item): ?>
             <tr>
-                <td class="py-1 align-top">
+                <td class="receipt-item-description">
                     <div class="font-bold leading-tight"><?php echo e($item['product_name']); ?></div>
                     <?php if (!empty($item['variant_name'])): ?>
                         <div class="text-[11px] text-stone-500"><?php echo e($item['variant_name']); ?></div>
                     <?php endif; ?>
                 </td>
-                <td class="py-1 text-center align-top"><?php echo (int)$item['quantity']; ?></td>
+                <td class="receipt-item-qty"><?php echo (int)$item['quantity']; ?></td>
             </tr>
             <?php endforeach; ?>
         </tbody>

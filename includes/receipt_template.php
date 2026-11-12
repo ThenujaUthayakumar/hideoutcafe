@@ -44,18 +44,18 @@ $normalDiscount = (float)($order['normal_discount'] ?? max(0, (float)($order['di
     <div class="receipt-divider"></div>
 
     <!-- Items Table -->
-    <table class="w-full text-sm text-left my-1">
+    <table class="receipt-items receipt-items-main">
         <thead>
-            <tr class="border-b border-stone-800 pb-1">
-                <th class="py-0.5 font-normal">DESCRIPTION</th>
-                <th class="py-0.5 text-center font-normal">QTY</th>
-                <th class="py-0.5 text-right font-normal">AMOUNT</th>
+            <tr>
+                <th class="receipt-item-description">DESCRIPTION</th>
+                <th class="receipt-item-qty">QTY</th>
+                <th class="receipt-item-amount">AMOUNT</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($order['items'] as $item): ?>
             <tr>
-                <td class="py-1 align-top">
+                <td class="receipt-item-description">
                     <div class="leading-tight"><?= e($item['product_name']) ?></div>
                     <?php if (!empty($item['variant_name'])): ?>
                         <div class="text-[11px] text-stone-500"><?= e($item['variant_name']) ?></div>
@@ -80,53 +80,53 @@ $normalDiscount = (float)($order['normal_discount'] ?? max(0, (float)($order['di
                     }
                     ?>
                 </td>
-                <td class="py-1 text-center align-top"><?= (int)$item['quantity'] ?></td>
+                <td class="receipt-item-qty"><?= (int)$item['quantity'] ?></td>
                 <!-- <td class="py-1.5 text-right align-top"><?= number_format($item['unit_price'], 2) ?></td> -->
                 <!-- <td class="py-1.5 text-right align-top font-bold"><?= number_format($item['subtotal'], 2) ?></td> -->
-                <td class="py-1 text-right align-top"><?= number_format($item['subtotal'], 2) ?></td>
+                <td class="receipt-item-amount"><?= number_format($item['subtotal'], 2) ?></td>
             </tr>
             <?php endforeach; ?>
         </tbody>
     </table>
 
-    <div class="receipt-divider-double"></div>
+    <div class="receipt-divider receipt-divider-solid"></div>
 
     <!-- Totals Summary -->
-    <div class="text-sm space-y-1">
-        <div class="flex justify-between">
+    <div class="receipt-summary">
+        <div class="receipt-total-row">
             <span>Subtotal:</span>
             <span> <?= number_format($order['subtotal'], 2) ?></span>
         </div>
-        <div class="flex justify-between text-sm font-black pt-0.5">
+        <div class="receipt-total-row receipt-total-grand">
             <span>Total:</span>
             <span><?= number_format($order['grand_total'], 2) ?></span>
         </div>
         <?php if ($promotionDiscount > 0): ?>
-        <div class="flex justify-between text-emerald-700">
+        <div class="receipt-total-row text-emerald-700">
             <span>Promotion Discount:</span>
             <span>-<?= number_format($promotionDiscount, 2) ?></span>
         </div>
         <?php endif; ?>
         <?php if ($normalDiscount > 0): ?>
-        <div class="flex justify-between text-stone-700">
+        <div class="receipt-total-row text-stone-700">
             <span>Normal Discount:</span>
             <span>-<?= number_format($normalDiscount, 2) ?></span>
         </div>
         <?php endif; ?>
         <?php if (($promotionDiscount + $normalDiscount) > 0): ?>
-        <div class="flex justify-between font-normal">
+        <div class="receipt-total-row">
             <span>Total Discount:</span>
             <span>-<?= number_format($promotionDiscount + $normalDiscount, 2) ?></span>
         </div>
         <?php endif; ?>
         <div class="receipt-divider"></div>
         <?php if ($order['paid_amount'] > 0): ?>
-        <div class="flex justify-between">
+        <div class="receipt-total-row">
             <span><?= e($order['payment_method']) ?></span>
             <span><?= number_format($order['paid_amount'], 2) ?></span>
         </div>
         <?php endif; ?>
-        <div class="flex justify-between text-sm font-normal pt-0.5">
+        <div class="receipt-total-row">
             <span>Balance:</span>
             <span><?= number_format($order['change_amount'], 2) ?></span>
         </div>
@@ -135,7 +135,7 @@ $normalDiscount = (float)($order['normal_discount'] ?? max(0, (float)($order['di
     </div>
 
     <!-- Footer Note -->
-    <div class="text-center pt-2 space-y-2">
+    <div class="receipt-footer">
         <div class="text-xs text-stone-700 font-medium leading-tight">
             <?= nl2br(e($settings['receipt_footer'] ?? 'Thank you for your visit!')) ?>
         </div>
