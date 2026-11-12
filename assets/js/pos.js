@@ -1,5 +1,6 @@
 ﻿/**
  * The Hide Out Cafe - Main Point of Sale Interactive Engine
+ * (Local Testing - Fixed)
  */
 
 const PosApp = {
@@ -286,7 +287,6 @@ const PosApp = {
     this.state.tableId = null;
     this.state.tableName = 'No Table';
     this.state.customer = null;
-    //this.state.customer = { id: 1, name: 'Walk-in Customer', phone: '0000000000', points: 0 };
     this.renderCart();
   },
 
@@ -328,117 +328,117 @@ const PosApp = {
     Toast.success(`Customer set: ${customer.name}`);
   },
 
-getCalculations() {
-  let subtotal = 0;
-  let productDiscount = 0;
-  let eligibleSubtotal = 0;
-  const now = Date.now();
+  getCalculations() {
+    let subtotal = 0;
+    let productDiscount = 0;
+    let eligibleSubtotal = 0;
+    const now = Date.now();
 
-  this.state.cart.forEach(item => {
-    let itemUnit = parseFloat(item.unitPrice) || 0;
+    this.state.cart.forEach(item => {
+      let itemUnit = parseFloat(item.unitPrice) || 0;
 
-    if (item.modifiers && item.modifiers.length > 0) {
-      item.modifiers.forEach(m => {
-        itemUnit += parseFloat(m.price || 0);
-      });
-    }
-
-    const lineSubtotal = itemUnit * item.quantity;
-    subtotal += lineSubtotal;
-
-    const start = item.discountStart ? new Date(item.discountStart.replace(' ', 'T')).getTime() : null;
-    const end = item.discountEnd ? new Date(item.discountEnd.replace(' ', 'T')).getTime() : null;
-    const active = (!start || now >= start) && (!end || now <= end);
-    if (active && item.discountValue > 0) {
-      const discount = item.discountType === 'fixed'
-        ? item.discountValue * item.quantity
-        : (lineSubtotal * item.discountValue) / 100;
-      productDiscount += Math.min(lineSubtotal, discount);
-    } else {
-      eligibleSubtotal += lineSubtotal;
-    }
-  });
-
-  const afterProductDiscount = Math.max(0, subtotal - productDiscount);
-  let orderDiscount = 0;
-
-  if (this.state.discountType === 'percentage') {
-    orderDiscount = (eligibleSubtotal * (parseFloat(this.state.discountValue) || 0)) / 100;
-  } else {
-    orderDiscount = parseFloat(this.state.discountValue) || 0;
-  }
-
-  orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
-  let ruleDiscount = 0;
-  (window.POS_PROMOTIONS || []).forEach(promotion => {
-    const type = promotion.promotion_type;
-    if (['minimum_spend', 'loyalty', 'first_order'].includes(type)) {
-      const qualifies = type === 'minimum_spend'
-        ? subtotal >= Number(promotion.minimum_spend || 0)
-        : type === 'loyalty'
-          ? this.state.customer && Number(this.state.customer.points || 0) >= Number(promotion.minimum_points || 0)
-          : this.state.customer && this.state.customer.isFirstOrder;
-      if (qualifies) {
-        const value = promotion.discount_type === 'percentage' ? eligibleSubtotal * Number(promotion.discount_value) / 100 : Number(promotion.discount_value);
-        ruleDiscount = Math.max(ruleDiscount, Math.min(eligibleSubtotal, value));
-      }
-    }
-    if (['bogo', 'buy_x_get_y'].includes(type) && (promotion.product_id || promotion.product_ids)) {
-      const triggerIds = String(promotion.product_ids || promotion.product_id).split(',').map(Number).filter(Boolean);
-      const trigger = this.state.cart.find(item => triggerIds.includes(Number(item.productId)));
-      if (trigger) {
-        const groups = Math.floor(trigger.quantity / (Number(promotion.buy_quantity || 1) + Number(promotion.get_quantity || 1)));
-        let freeQuantity = groups * Number(promotion.get_quantity || 1);
-        const rewardIds = String(promotion.reward_product_ids || promotion.reward_product_id || trigger.productId).split(',').map(Number).filter(Boolean);
-        rewardIds.forEach(rewardId => {
-          const reward = this.state.cart.find(item => Number(item.productId) === rewardId);
-          if (reward && freeQuantity > 0) {
-            const freeCount = Math.min(reward.quantity, freeQuantity);
-            ruleDiscount += freeCount * (Number(reward.unitPrice) || 0);
-            freeQuantity -= freeCount;
-          }
+      if (item.modifiers && item.modifiers.length > 0) {
+        item.modifiers.forEach(m => {
+          itemUnit += parseFloat(m.price || 0);
         });
       }
+
+      const lineSubtotal = itemUnit * item.quantity;
+      subtotal += lineSubtotal;
+
+      const start = item.discountStart ? new Date(item.discountStart.replace(' ', 'T')).getTime() : null;
+      const end = item.discountEnd ? new Date(item.discountEnd.replace(' ', 'T')).getTime() : null;
+      const active = (!start || now >= start) && (!end || now <= end);
+      if (active && item.discountValue > 0) {
+        const discount = item.discountType === 'fixed'
+          ? item.discountValue * item.quantity
+          : (lineSubtotal * item.discountValue) / 100;
+        productDiscount += Math.min(lineSubtotal, discount);
+      } else {
+        eligibleSubtotal += lineSubtotal;
+      }
+    });
+
+    const afterProductDiscount = Math.max(0, subtotal - productDiscount);
+    let orderDiscount = 0;
+
+    if (this.state.discountType === 'percentage') {
+      orderDiscount = (eligibleSubtotal * (parseFloat(this.state.discountValue) || 0)) / 100;
+    } else {
+      orderDiscount = parseFloat(this.state.discountValue) || 0;
     }
-    if (type === 'combo' && promotion.combo_product_ids) {
-      const ids = String(promotion.combo_product_ids).split(',').map(Number).filter(Boolean);
-      if (ids.length && ids.every(id => this.state.cart.some(item => Number(item.productId) === id))) {
-        const comboGross = ids.reduce((sum, id) => {
-          const item = this.state.cart.find(line => Number(line.productId) === id);
-          return sum + (Number(item.unitPrice) || 0);
-        }, 0);
-        ruleDiscount += Math.max(0, comboGross - Number(promotion.discount_value || 0));
+
+    orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
+    let ruleDiscount = 0;
+    (window.POS_PROMOTIONS || []).forEach(promotion => {
+      const type = promotion.promotion_type;
+      if (['minimum_spend', 'loyalty', 'first_order'].includes(type)) {
+        const qualifies = type === 'minimum_spend'
+          ? subtotal >= Number(promotion.minimum_spend || 0)
+          : type === 'loyalty'
+            ? this.state.customer && Number(this.state.customer.points || 0) >= Number(promotion.minimum_points || 0)
+            : this.state.customer && this.state.customer.isFirstOrder;
+        if (qualifies) {
+          const value = promotion.discount_type === 'percentage' ? eligibleSubtotal * Number(promotion.discount_value) / 100 : Number(promotion.discount_value);
+          ruleDiscount = Math.max(ruleDiscount, Math.min(eligibleSubtotal, value));
+        }
+      }
+      if (['bogo', 'buy_x_get_y'].includes(type) && (promotion.product_id || promotion.product_ids)) {
+        const triggerIds = String(promotion.product_ids || promotion.product_id).split(',').map(Number).filter(Boolean);
+        const trigger = this.state.cart.find(item => triggerIds.includes(Number(item.productId)));
+        if (trigger) {
+          const groups = Math.floor(trigger.quantity / (Number(promotion.buy_quantity || 1) + Number(promotion.get_quantity || 1)));
+          let freeQuantity = groups * Number(promotion.get_quantity || 1);
+          const rewardIds = String(promotion.reward_product_ids || promotion.reward_product_id || trigger.productId).split(',').map(Number).filter(Boolean);
+          rewardIds.forEach(rewardId => {
+            const reward = this.state.cart.find(item => Number(item.productId) === rewardId);
+            if (reward && freeQuantity > 0) {
+              const freeCount = Math.min(reward.quantity, freeQuantity);
+              ruleDiscount += freeCount * (Number(reward.unitPrice) || 0);
+              freeQuantity -= freeCount;
+            }
+          });
+        }
+      }
+      if (type === 'combo' && promotion.combo_product_ids) {
+        const ids = String(promotion.combo_product_ids).split(',').map(Number).filter(Boolean);
+        if (ids.length && ids.every(id => this.state.cart.some(item => Number(item.productId) === id))) {
+          const comboGross = ids.reduce((sum, id) => {
+            const item = this.state.cart.find(line => Number(line.productId) === id);
+            return sum + (Number(item.unitPrice) || 0);
+          }, 0);
+          ruleDiscount += Math.max(0, comboGross - Number(promotion.discount_value || 0));
+        }
+      }
+    });
+    const selectedPromotion = (window.POS_ORDER_PROMOTIONS || []).find(promotion => String(promotion.id) === String(this.state.promotionId));
+    if (selectedPromotion) {
+      const qualifies = selectedPromotion.promotion_type !== 'minimum_spend' || subtotal >= Number(selectedPromotion.minimum_spend || 0);
+      if (qualifies) {
+        const selectedDiscount = selectedPromotion.discount_type === 'percentage'
+          ? eligibleSubtotal * Number(selectedPromotion.discount_value || 0) / 100
+          : Number(selectedPromotion.discount_value || 0);
+        orderDiscount = Math.min(eligibleSubtotal, Math.max(0, selectedDiscount));
       }
     }
-  });
-  const selectedPromotion = (window.POS_ORDER_PROMOTIONS || []).find(promotion => String(promotion.id) === String(this.state.promotionId));
-  if (selectedPromotion) {
-    const qualifies = selectedPromotion.promotion_type !== 'minimum_spend' || subtotal >= Number(selectedPromotion.minimum_spend || 0);
-    if (qualifies) {
-      const selectedDiscount = selectedPromotion.discount_type === 'percentage'
-        ? eligibleSubtotal * Number(selectedPromotion.discount_value || 0) / 100
-        : Number(selectedPromotion.discount_value || 0);
-      orderDiscount = Math.min(eligibleSubtotal, Math.max(0, selectedDiscount));
-    }
-  }
-  orderDiscount = Math.max(orderDiscount, Math.min(eligibleSubtotal, ruleDiscount));
-  const discount = productDiscount + orderDiscount;
+    orderDiscount = Math.max(orderDiscount, Math.min(eligibleSubtotal, ruleDiscount));
+    const discount = productDiscount + orderDiscount;
 
-  const netSubtotal = Math.max(0, afterProductDiscount - orderDiscount);
-  const taxAmount = netSubtotal * (this.state.taxRate || 0) / 100;
-  const serviceCharge = netSubtotal * (this.state.serviceChargeRate || 0) / 100;
-  const grandTotal = netSubtotal + taxAmount + serviceCharge;
+    const netSubtotal = Math.max(0, afterProductDiscount - orderDiscount);
+    const taxAmount = netSubtotal * (this.state.taxRate || 0) / 100;
+    const serviceCharge = netSubtotal * (this.state.serviceChargeRate || 0) / 100;
+    const grandTotal = netSubtotal + taxAmount + serviceCharge;
 
-  return {
-    subtotal,
-    productDiscount,
-    orderDiscount,
-    discount,
-    taxAmount,
-    serviceCharge,
-    grandTotal
-  };
-},
+    return {
+      subtotal,
+      productDiscount,
+      orderDiscount,
+      discount,
+      taxAmount,
+      serviceCharge,
+      grandTotal
+    };
+  },
 
   renderCart() {
     const cartContainer = document.getElementById('pos-cart-items');
@@ -688,16 +688,7 @@ getCalculations() {
     if (window.qz && window.QZ_PRINT_SETTINGS) {
       this.printReceiptsToConfiguredPrinters(orderId).catch((error) => {
         console.error('Direct printer error:', error);
-        const message = (error instanceof Error ? error.message : String(error))
-          .slice(0, 200)
-          .replace(/[&<>"']/g, (character) => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
-          })[character]);
-        Toast.error(`QZ direct print failed: ${message}. Opening browser print dialogs.`);
+        Toast.error('Direct printing unavailable. Opening print dialogs instead.');
         this.openReceiptPrintDialogs(orderId);
       });
       return;
@@ -718,17 +709,10 @@ getCalculations() {
 
     const printCopy = async (copy, printerName) => {
       const receiptHtml = await this.loadReceiptDocument(orderId, copy);
-      const printerConfig = qz.configs.create(printerName, {
-        margins: 0,
-        orientation: 'portrait'
-      });
+      const printerConfig = qz.configs.create(printerName);
       await qz.print(printerConfig, [{
-        type: 'pixel',
-        format: 'html',
-        flavor: 'plain',
-        options: {
-          pageWidth: 80 / 25.4
-        },
+        type: 'html',
+        format: 'plain',
         data: receiptHtml
       }]);
     };
