@@ -718,10 +718,17 @@ getCalculations() {
 
     const printCopy = async (copy, printerName) => {
       const receiptHtml = await this.loadReceiptDocument(orderId, copy);
-      const printerConfig = qz.configs.create(printerName);
+      const printerConfig = qz.configs.create(printerName, {
+        margins: 0,
+        orientation: 'portrait'
+      });
       await qz.print(printerConfig, [{
-        type: 'html',
-        format: 'plain',
+        type: 'pixel',
+        format: 'html',
+        flavor: 'plain',
+        options: {
+          pageWidth: 80 / 25.4
+        },
         data: receiptHtml
       }]);
     };
