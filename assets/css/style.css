@@ -183,9 +183,10 @@ body {
 
 .receipt-container {
   width: 80mm;
-  max-width: 100%;
+  max-width: 80mm;
   margin: 0 auto;
-  padding: 8px 8px;
+  padding: 2mm 3mm;
+  box-sizing: border-box;
   background: #ffffff;
   color: #111827;
   font-family: "Courier New", Courier, monospace;
