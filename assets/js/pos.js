@@ -1,6 +1,6 @@
 ﻿/**
  * The Hide Out Cafe - Main Point of Sale Interactive Engine
- * (Local Testing - Fixed)
+ * (Clean + Fixed version)
  */
 
 const PosApp = {
@@ -23,7 +23,7 @@ const PosApp = {
     this.state.currencySymbol = settings.currencySymbol || 'Rs.';
     this.state.taxRate = parseFloat(settings.taxRate) || 0;
     this.state.serviceChargeRate = parseFloat(settings.serviceChargeRate) || 0;
-    
+
     this.bindKeyboardShortcuts();
     this.renderCart();
     this.filterProducts();
@@ -34,7 +34,7 @@ const PosApp = {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) && e.key !== 'F2' && e.key !== 'Escape') {
         return;
       }
-      
+
       switch (e.key) {
         case 'F1':
           e.preventDefault();
@@ -60,7 +60,6 @@ const PosApp = {
     });
   },
 
-  // Category Filtering
   setCategory(catId) {
     this.state.activeCategoryId = catId;
     document.querySelectorAll('.cat-pill').forEach(btn => {
@@ -109,10 +108,10 @@ const PosApp = {
   selectProduct(productId) {
     const rawData = document.getElementById(`product-raw-${productId}`);
     if (!rawData) return;
-    
+
     try {
       const product = JSON.parse(rawData.textContent);
-      
+
       const hasVariants = product.variants && product.variants.length > 0;
       const hasModifiers = window.POS_MODIFIERS && window.POS_MODIFIERS.length > 0;
 
@@ -142,12 +141,11 @@ const PosApp = {
 
   openModifierModal(product) {
     this.state.selectedProductForModal = product;
-    
+
     document.getElementById('modal-product-name').textContent = product.name;
     document.getElementById('modal-product-price').textContent = `${this.state.currencySymbol} ${parseFloat(product.price).toFixed(2)}`;
     document.getElementById('modal-item-notes').value = '';
 
-    // Render Variants
     const variantContainer = document.getElementById('modal-variants-list');
     if (variantContainer) {
       variantContainer.innerHTML = '';
@@ -171,7 +169,6 @@ const PosApp = {
       }
     }
 
-    // Render Modifiers
     const modContainer = document.getElementById('modal-modifiers-list');
     if (modContainer && window.POS_MODIFIERS) {
       modContainer.innerHTML = '';
@@ -370,6 +367,7 @@ const PosApp = {
 
     orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
     let ruleDiscount = 0;
+
     (window.POS_PROMOTIONS || []).forEach(promotion => {
       const type = promotion.promotion_type;
       if (['minimum_spend', 'loyalty', 'first_order'].includes(type)) {
@@ -411,6 +409,7 @@ const PosApp = {
         }
       }
     });
+
     const selectedPromotion = (window.POS_ORDER_PROMOTIONS || []).find(promotion => String(promotion.id) === String(this.state.promotionId));
     if (selectedPromotion) {
       const qualifies = selectedPromotion.promotion_type !== 'minimum_spend' || subtotal >= Number(selectedPromotion.minimum_spend || 0);
@@ -421,6 +420,7 @@ const PosApp = {
         orderDiscount = Math.min(eligibleSubtotal, Math.max(0, selectedDiscount));
       }
     }
+
     orderDiscount = Math.max(orderDiscount, Math.min(eligibleSubtotal, ruleDiscount));
     const discount = productDiscount + orderDiscount;
 
@@ -489,7 +489,6 @@ const PosApp = {
               ${modsBadges ? `<div class="mt-1.5 flex flex-wrap">${modsBadges}</div>` : ''}
               ${notesHtml}
             </div>
-
             <div class="flex flex-col items-end gap-1.5">
               <span class="font-bold text-stone-900 text-sm">${this.state.currencySymbol} ${itemTotal.toFixed(2)}</span>
               <div class="flex items-center border border-stone-300 rounded-lg overflow-hidden bg-white shadow-xs">
@@ -507,20 +506,17 @@ const PosApp = {
       });
     }
 
-    // Update Summary Box
     document.getElementById('pos-subtotal').textContent = `${this.state.currencySymbol} ${calc.subtotal.toFixed(2)}`;
     document.getElementById('pos-promotion-discount').textContent = `-${this.state.currencySymbol} ${calc.productDiscount.toFixed(2)}`;
     document.getElementById('pos-normal-discount').textContent = `-${this.state.currencySymbol} ${calc.orderDiscount.toFixed(2)}`;
     const totalDiscountElement = document.getElementById('pos-total-discount');
     if (totalDiscountElement) totalDiscountElement.textContent = `-${this.state.currencySymbol} ${calc.discount.toFixed(2)}`;
     document.getElementById('pos-grand-total').textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
-    
-    // Bottom Pay Button
+
     const payBtnTotal = document.getElementById('pos-pay-btn-amount');
     if (payBtnTotal) payBtnTotal.textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
   },
 
-  // Checkout & Payment
   openCheckoutModal() {
     if (this.state.cart.length === 0) {
       Toast.warning('Cart is empty. Please add items to checkout.');
@@ -530,10 +526,10 @@ const PosApp = {
     const calc = this.getCalculations();
     document.getElementById('pay-modal-total').textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
     document.getElementById('pay-cash-tendered').value = calc.grandTotal.toFixed(2);
-    
+
     this.calculateChange();
     this.renderPresetCashButtons(calc.grandTotal);
-    
+
     openModal('pos-checkout-modal');
   },
 
@@ -541,12 +537,11 @@ const PosApp = {
     const presetsContainer = document.getElementById('pay-preset-buttons');
     if (!presetsContainer) return;
 
-    // Sri Lanka Rupee standard notes: 500, 1000, 2000, 5000
     const rounded500 = Math.ceil(total / 500) * 500;
     const rounded1000 = Math.ceil(total / 1000) * 1000;
     const rounded2000 = Math.ceil(total / 2000) * 2000;
     const rounded5000 = Math.ceil(total / 5000) * 5000;
-    
+
     const amounts = Array.from(new Set([total, rounded500, rounded1000, rounded2000, rounded5000, 5000])).filter(a => a >= total).slice(0, 4);
 
     presetsContainer.innerHTML = '';
@@ -568,9 +563,9 @@ const PosApp = {
     const calc = this.getCalculations();
     const tendered = parseFloat(document.getElementById('pay-cash-tendered').value) || 0;
     const change = Math.max(0, tendered - calc.grandTotal);
-    
+
     document.getElementById('pay-change-amount').textContent = `${this.state.currencySymbol} ${change.toFixed(2)}`;
-    
+
     const changeBox = document.getElementById('pay-change-box');
     if (tendered < calc.grandTotal) {
       changeBox.classList.add('bg-rose-50', 'border-rose-200');
@@ -586,10 +581,9 @@ const PosApp = {
     }
   },
 
-  // Submit Order to Backend
   async submitOrder(paymentMethod = 'cash') {
     if (this.state.cart.length === 0) return;
-    
+
     const calc = this.getCalculations();
     const tendered = parseFloat(document.getElementById('pay-cash-tendered').value) || calc.grandTotal;
 
@@ -684,43 +678,62 @@ const PosApp = {
     openModal('receipt-success-modal');
   },
 
+  // ===================== PRINTING (QZ) =====================
   printReceiptDirect(orderId) {
     if (window.qz && window.QZ_PRINT_SETTINGS) {
       this.printReceiptsToConfiguredPrinters(orderId).catch((error) => {
-        console.error('Direct printer error:', error);
-        Toast.error('Direct printing unavailable. Opening print dialogs instead.');
+        console.error('QZ Direct Print Error:', error);
+        Toast.error('QZ printing failed. Opening browser print instead.');
         this.openReceiptPrintDialogs(orderId);
       });
       return;
     }
 
+    console.warn('QZ not available');
+    Toast.warning('QZ Tray not detected. Using browser print.');
     this.openReceiptPrintDialogs(orderId);
   },
 
   openReceiptPrintDialogs(orderId) {
-    const printWindow = window.open(`print_receipt.php?id=${orderId}&copy=main&print_next=1&auto_print=1`, '_blank', 'width=400,height=600');
+    const printWindow = window.open(
+      `print_receipt.php?id=${orderId}&copy=main&print_next=1&auto_print=1`,
+      '_blank',
+      'width=400,height=600'
+    );
     if (printWindow) printWindow.focus();
   },
 
   async printReceiptsToConfiguredPrinters(orderId) {
-    if (!qz.websocket.isActive()) {
-      await qz.websocket.connect();
+    try {
+      if (!qz.websocket.isActive()) {
+        console.log('Connecting to QZ Tray...');
+        await qz.websocket.connect();
+      }
+
+      const printCopy = async (copy, printerName) => {
+        console.log(`Printing ${copy} → ${printerName}`);
+        const receiptHtml = await this.loadReceiptDocument(orderId, copy);
+
+        const printerConfig = qz.configs.create(printerName);
+
+        await qz.print(printerConfig, [{
+          type: 'html',
+          format: 'plain',
+          data: receiptHtml
+        }]);
+
+        console.log(`${copy} printed successfully`);
+      };
+
+      await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
+      await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
+
+      await qz.websocket.disconnect();
+      Toast.success('Main bill and kitchen copy sent to printers.');
+    } catch (err) {
+      console.error('printReceiptsToConfiguredPrinters error:', err);
+      throw err;
     }
-
-    const printCopy = async (copy, printerName) => {
-      const receiptHtml = await this.loadReceiptDocument(orderId, copy);
-      const printerConfig = qz.configs.create(printerName);
-      await qz.print(printerConfig, [{
-        type: 'html',
-        format: 'plain',
-        data: receiptHtml
-      }]);
-    };
-
-    await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
-    await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
-    await qz.websocket.disconnect();
-    Toast.success('Main bill and kitchen copy sent to their printers.');
   },
 
   loadReceiptDocument(orderId, copy) {
@@ -728,6 +741,7 @@ const PosApp = {
       const frame = document.createElement('iframe');
       frame.hidden = true;
       frame.src = `print_receipt.php?id=${encodeURIComponent(orderId)}&copy=${copy}&embed=1`;
+
       frame.onload = () => {
         try {
           resolve(frame.contentDocument.documentElement.outerHTML);
@@ -737,14 +751,17 @@ const PosApp = {
           frame.remove();
         }
       };
+
       frame.onerror = () => {
         frame.remove();
         reject(new Error(`Could not load ${copy} receipt`));
       };
+
       document.body.appendChild(frame);
     });
   },
 
+  // ===================== HOLD ORDERS =====================
   async holdCurrentOrder() {
     if (this.state.cart.length === 0) {
       Toast.warning('Cannot hold an empty cart');
