@@ -779,7 +779,13 @@ const PosApp = {
         await qz.websocket.connect();
       }
 
-      const printCopy = async (copy, printerName) => {
+      const printCopy = async (configuredCopy, printerName) => {
+        const printerLabel = String(printerName || '').toLowerCase();
+        const copy = printerLabel.includes('kitchen')
+          ? 'kitchen'
+          : printerLabel.includes('cashier')
+            ? 'main'
+            : configuredCopy;
         console.log(`Printing ${copy} → ${printerName}`);
         const receiptHtml = await this.loadReceiptDocument(orderId, copy);
 
