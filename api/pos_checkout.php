@@ -29,12 +29,13 @@ try {
 
     $currentUser = currentUser();
     $activeShift = getOpenCashRegister();
-    if (!$activeShift) {
-        throw new Exception('No shift is open. Ask an administrator to open the shift first.');
-    }
-    if ((int)$activeShift['user_id'] !== (int)$currentUser['id']) {
-        throw new Exception('This shift has not been confirmed by your user account.');
-    }
+    // Keep shift validation available to re-enable if shift enforcement is needed.
+    // if (!$activeShift) {
+    //     throw new Exception('No shift is open. Ask an administrator to open the shift first.');
+    // }
+    // if ($activeShift && (int)$activeShift['user_id'] !== (int)$currentUser['id']) {
+    //     throw new Exception('This shift has not been confirmed by your user account.');
+    // }
 
     $invoiceNo = generateInvoiceNo();
     

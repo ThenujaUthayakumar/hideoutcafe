@@ -16,7 +16,8 @@ const PosApp = {
     currencySymbol: 'Rs.',
     activeCategoryId: 'all',
     searchQuery: '',
-    selectedProductForModal: null
+    selectedProductForModal: null,
+    customerSearchSequence: 0
   },
 
   init(settings = {}) {
@@ -284,6 +285,7 @@ const PosApp = {
     this.state.tableId = null;
     this.state.tableName = 'No Table';
     this.state.customer = null;
+    this.updateCustomerDisplay();
     this.renderCart();
   },
 
@@ -319,10 +321,77 @@ const PosApp = {
 
   selectCustomer(customer) {
     this.state.customer = customer;
-    document.getElementById('pos-customer-name').textContent = customer.name;
-    document.getElementById('pos-customer-points').textContent = `${Number(customer.points || 0).toFixed(2)} pts`;
+    this.updateCustomerDisplay();
     closeModal('customer-search-modal');
     Toast.success(`Customer set: ${customer.name}`);
+  },
+
+  updateCustomerDisplay() {
+    const name = document.getElementById('pos-customer-name');
+    const points = document.getElementById('pos-customer-points');
+    if (name) name.textContent = this.state.customer ? this.state.customer.name : 'No Customer Selected';
+    if (points) {
+      points.textContent = this.state.customer
+        ? `${Number(this.state.customer.points || this.state.customer.loyalty_points || 0).toFixed(2)} pts`
+        : 'Optional';
+    }
+  },
+
+  async searchCustomers(query) {
+    const results = document.getElementById('cust-search-results');
+    if (!results) return;
+
+    const searchSequence = ++this.state.customerSearchSequence;
+    try {
+      const res = await fetch(`api/get_customers.php?q=${encodeURIComponent(query.trim())}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Could not search customers');
+      }
+      if (searchSequence !== this.state.customerSearchSequence) return;
+
+      results.replaceChildren();
+      if (!data.customers || data.customers.length === 0) {
+        results.textContent = 'No customers found.';
+        results.className = 'space-y-2 max-h-60 overflow-y-auto text-xs text-stone-400';
+        return;
+      }
+
+      results.className = 'space-y-2 max-h-60 overflow-y-auto';
+      data.customers.forEach(customer => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'w-full flex items-center justify-between p-3 border border-stone-800 rounded-xl hover:border-red-600 hover:bg-stone-800/80 text-left transition';
+        row.addEventListener('click', () => this.selectCustomer({
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          points: customer.loyalty_points,
+          isFirstOrder: Boolean(Number(customer.is_first_order))
+        }));
+
+        const details = document.createElement('span');
+        const name = document.createElement('span');
+        name.className = 'block font-bold text-xs text-white';
+        name.textContent = customer.name;
+        const phone = document.createElement('span');
+        phone.className = 'block text-[11px] text-stone-400';
+        phone.textContent = customer.phone || '';
+        details.append(name, phone);
+
+        const loyaltyPoints = document.createElement('span');
+        loyaltyPoints.className = 'text-xs font-extrabold text-red-400 bg-red-950/70 border border-red-900 px-2 py-0.5 rounded-lg';
+        loyaltyPoints.textContent = `${Number(customer.loyalty_points || 0).toFixed(2)} pts`;
+
+        row.append(details, loyaltyPoints);
+        results.appendChild(row);
+      });
+    } catch (error) {
+      if (searchSequence !== this.state.customerSearchSequence) return;
+      console.error('Customer search error:', error);
+      results.textContent = 'Could not load customers. Please try again.';
+      Toast.error('Could not search customers');
+    }
   },
 
   getCalculations() {
@@ -799,9 +868,12 @@ const PosApp = {
       if (data.success) {
         Toast.success('Order held successfully');
         this.clearCart();
+      } else {
+        throw new Error(data.message || 'Failed to hold order');
       }
-    } catch (e) {
-      Toast.error('Failed to hold order');
+    } catch (error) {
+      console.error('Hold order error:', error);
+      Toast.error(error.message || 'Failed to hold order');
     }
   },
 
@@ -850,13 +922,20 @@ const PosApp = {
         this.state.cart = JSON.parse(data.order.cart_json);
         this.state.orderType = data.order.order_type || 'dine_in';
         this.state.tableId = data.order.table_id;
+        this.state.customer = data.customer
+          ? { ...data.customer, isFirstOrder: Boolean(Number(data.customer.is_first_order)) }
+          : null;
+        this.updateCustomerDisplay();
         this.setOrderType(this.state.orderType);
         this.renderCart();
         closeModal('held-orders-modal');
         Toast.success('Held order loaded');
+      } else {
+        throw new Error(data.message || 'Failed to recall order');
       }
-    } catch (e) {
-      Toast.error('Failed to recall order');
+    } catch (error) {
+      console.error('Recall held order error:', error);
+      Toast.error(error.message || 'Failed to recall order');
     }
   },
 
