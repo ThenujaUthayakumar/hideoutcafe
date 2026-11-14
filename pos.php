@@ -460,7 +460,7 @@ require_once __DIR__ . '/includes/header.php';
         kitchenPrinter: 'XP-80C (copy 2)'
     };
 </script>
-<script src="<?= BASE_URL ?>/assets/js/pos.js"></script>
+<script src="<?= BASE_URL ?>/assets/js/pos.js?v=<?= filemtime(__DIR__ . '/assets/js/pos.js') ?>"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     PosApp.init(window.POS_SETTINGS);

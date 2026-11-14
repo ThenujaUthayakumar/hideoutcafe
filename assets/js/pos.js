@@ -1,5 +1,6 @@
 ﻿/**
  * The Hide Out Cafe - Main Point of Sale Interactive Engine
+ * (Clean + Fixed version)
  */
 
 const PosApp = {
@@ -23,7 +24,7 @@ const PosApp = {
     this.state.currencySymbol = settings.currencySymbol || 'Rs.';
     this.state.taxRate = parseFloat(settings.taxRate) || 0;
     this.state.serviceChargeRate = parseFloat(settings.serviceChargeRate) || 0;
-    
+
     this.bindKeyboardShortcuts();
     this.renderCart();
     this.filterProducts();
@@ -34,7 +35,7 @@ const PosApp = {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) && e.key !== 'F2' && e.key !== 'Escape') {
         return;
       }
-      
+
       switch (e.key) {
         case 'F1':
           e.preventDefault();
@@ -60,7 +61,6 @@ const PosApp = {
     });
   },
 
-  // Category Filtering
   setCategory(catId) {
     this.state.activeCategoryId = catId;
     document.querySelectorAll('.cat-pill').forEach(btn => {
@@ -109,10 +109,10 @@ const PosApp = {
   selectProduct(productId) {
     const rawData = document.getElementById(`product-raw-${productId}`);
     if (!rawData) return;
-    
+
     try {
       const product = JSON.parse(rawData.textContent);
-      
+
       const hasVariants = product.variants && product.variants.length > 0;
       const hasModifiers = window.POS_MODIFIERS && window.POS_MODIFIERS.length > 0;
 
@@ -142,12 +142,11 @@ const PosApp = {
 
   openModifierModal(product) {
     this.state.selectedProductForModal = product;
-    
+
     document.getElementById('modal-product-name').textContent = product.name;
     document.getElementById('modal-product-price').textContent = `${this.state.currencySymbol} ${parseFloat(product.price).toFixed(2)}`;
     document.getElementById('modal-item-notes').value = '';
 
-    // Render Variants
     const variantContainer = document.getElementById('modal-variants-list');
     if (variantContainer) {
       variantContainer.innerHTML = '';
@@ -171,7 +170,6 @@ const PosApp = {
       }
     }
 
-    // Render Modifiers
     const modContainer = document.getElementById('modal-modifiers-list');
     if (modContainer && window.POS_MODIFIERS) {
       modContainer.innerHTML = '';
@@ -286,7 +284,6 @@ const PosApp = {
     this.state.promotionId = '';
     this.state.tableId = null;
     this.state.tableName = 'No Table';
-    this.state.customer = { id: 1, name: 'Walk-in Customer', phone: '0000000000', points: 0 };
     this.state.customer = null;
     this.updateCustomerDisplay();
     this.renderCart();
@@ -329,12 +326,6 @@ const PosApp = {
     Toast.success(`Customer set: ${customer.name}`);
   },
 
-
-getCalculations() {
-  let subtotal = 0;
-  let productDiscount = 0;
-  let eligibleSubtotal = 0;
-  const now = Date.now();
   updateCustomerDisplay() {
     const name = document.getElementById('pos-customer-name');
     const points = document.getElementById('pos-customer-points');
@@ -409,111 +400,114 @@ getCalculations() {
     let eligibleSubtotal = 0;
     const now = Date.now();
 
-  this.state.cart.forEach(item => {
-    let itemUnit = parseFloat(item.unitPrice) || 0;
+    this.state.cart.forEach(item => {
+      let itemUnit = parseFloat(item.unitPrice) || 0;
 
-    if (item.modifiers && item.modifiers.length > 0) {
-      item.modifiers.forEach(m => {
-        itemUnit += parseFloat(m.price || 0);
-      });
-    }
-
-    const lineSubtotal = itemUnit * item.quantity;
-    subtotal += lineSubtotal;
-
-    const start = item.discountStart ? new Date(item.discountStart.replace(' ', 'T')).getTime() : null;
-    const end = item.discountEnd ? new Date(item.discountEnd.replace(' ', 'T')).getTime() : null;
-    const active = (!start || now >= start) && (!end || now <= end);
-    if (active && item.discountValue > 0) {
-      const discount = item.discountType === 'fixed'
-        ? item.discountValue * item.quantity
-        : (lineSubtotal * item.discountValue) / 100;
-      productDiscount += Math.min(lineSubtotal, discount);
-    } else {
-      eligibleSubtotal += lineSubtotal;
-    }
-  });
-
-  const afterProductDiscount = Math.max(0, subtotal - productDiscount);
-  let orderDiscount = 0;
-
-  if (this.state.discountType === 'percentage') {
-    orderDiscount = (eligibleSubtotal * (parseFloat(this.state.discountValue) || 0)) / 100;
-  } else {
-    orderDiscount = parseFloat(this.state.discountValue) || 0;
-  }
-
-  orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
-  let ruleDiscount = 0;
-  (window.POS_PROMOTIONS || []).forEach(promotion => {
-    const type = promotion.promotion_type;
-    if (['minimum_spend', 'loyalty', 'first_order'].includes(type)) {
-      const qualifies = type === 'minimum_spend'
-        ? subtotal >= Number(promotion.minimum_spend || 0)
-        : type === 'loyalty'
-          ? this.state.customer && Number(this.state.customer.points || 0) >= Number(promotion.minimum_points || 0)
-          : this.state.customer && this.state.customer.isFirstOrder;
-      if (qualifies) {
-        const value = promotion.discount_type === 'percentage' ? eligibleSubtotal * Number(promotion.discount_value) / 100 : Number(promotion.discount_value);
-        ruleDiscount = Math.max(ruleDiscount, Math.min(eligibleSubtotal, value));
-      }
-    }
-    if (['bogo', 'buy_x_get_y'].includes(type) && (promotion.product_id || promotion.product_ids)) {
-      const triggerIds = String(promotion.product_ids || promotion.product_id).split(',').map(Number).filter(Boolean);
-      const trigger = this.state.cart.find(item => triggerIds.includes(Number(item.productId)));
-      if (trigger) {
-        const groups = Math.floor(trigger.quantity / (Number(promotion.buy_quantity || 1) + Number(promotion.get_quantity || 1)));
-        let freeQuantity = groups * Number(promotion.get_quantity || 1);
-        const rewardIds = String(promotion.reward_product_ids || promotion.reward_product_id || trigger.productId).split(',').map(Number).filter(Boolean);
-        rewardIds.forEach(rewardId => {
-          const reward = this.state.cart.find(item => Number(item.productId) === rewardId);
-          if (reward && freeQuantity > 0) {
-            const freeCount = Math.min(reward.quantity, freeQuantity);
-            ruleDiscount += freeCount * (Number(reward.unitPrice) || 0);
-            freeQuantity -= freeCount;
-          }
+      if (item.modifiers && item.modifiers.length > 0) {
+        item.modifiers.forEach(m => {
+          itemUnit += parseFloat(m.price || 0);
         });
       }
+
+      const lineSubtotal = itemUnit * item.quantity;
+      subtotal += lineSubtotal;
+
+      const start = item.discountStart ? new Date(item.discountStart.replace(' ', 'T')).getTime() : null;
+      const end = item.discountEnd ? new Date(item.discountEnd.replace(' ', 'T')).getTime() : null;
+      const active = (!start || now >= start) && (!end || now <= end);
+      if (active && item.discountValue > 0) {
+        const discount = item.discountType === 'fixed'
+          ? item.discountValue * item.quantity
+          : (lineSubtotal * item.discountValue) / 100;
+        productDiscount += Math.min(lineSubtotal, discount);
+      } else {
+        eligibleSubtotal += lineSubtotal;
+      }
+    });
+
+    const afterProductDiscount = Math.max(0, subtotal - productDiscount);
+    let orderDiscount = 0;
+
+    if (this.state.discountType === 'percentage') {
+      orderDiscount = (eligibleSubtotal * (parseFloat(this.state.discountValue) || 0)) / 100;
+    } else {
+      orderDiscount = parseFloat(this.state.discountValue) || 0;
     }
-    if (type === 'combo' && promotion.combo_product_ids) {
-      const ids = String(promotion.combo_product_ids).split(',').map(Number).filter(Boolean);
-      if (ids.length && ids.every(id => this.state.cart.some(item => Number(item.productId) === id))) {
-        const comboGross = ids.reduce((sum, id) => {
-          const item = this.state.cart.find(line => Number(line.productId) === id);
-          return sum + (Number(item.unitPrice) || 0);
-        }, 0);
-        ruleDiscount += Math.max(0, comboGross - Number(promotion.discount_value || 0));
+
+    orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
+    let ruleDiscount = 0;
+
+    (window.POS_PROMOTIONS || []).forEach(promotion => {
+      const type = promotion.promotion_type;
+      if (['minimum_spend', 'loyalty', 'first_order'].includes(type)) {
+        const qualifies = type === 'minimum_spend'
+          ? subtotal >= Number(promotion.minimum_spend || 0)
+          : type === 'loyalty'
+            ? this.state.customer && Number(this.state.customer.points || 0) >= Number(promotion.minimum_points || 0)
+            : this.state.customer && this.state.customer.isFirstOrder;
+        if (qualifies) {
+          const value = promotion.discount_type === 'percentage' ? eligibleSubtotal * Number(promotion.discount_value) / 100 : Number(promotion.discount_value);
+          ruleDiscount = Math.max(ruleDiscount, Math.min(eligibleSubtotal, value));
+        }
+      }
+      if (['bogo', 'buy_x_get_y'].includes(type) && (promotion.product_id || promotion.product_ids)) {
+        const triggerIds = String(promotion.product_ids || promotion.product_id).split(',').map(Number).filter(Boolean);
+        const trigger = this.state.cart.find(item => triggerIds.includes(Number(item.productId)));
+        if (trigger) {
+          const groups = Math.floor(trigger.quantity / (Number(promotion.buy_quantity || 1) + Number(promotion.get_quantity || 1)));
+          let freeQuantity = groups * Number(promotion.get_quantity || 1);
+          const rewardIds = String(promotion.reward_product_ids || promotion.reward_product_id || trigger.productId).split(',').map(Number).filter(Boolean);
+          rewardIds.forEach(rewardId => {
+            const reward = this.state.cart.find(item => Number(item.productId) === rewardId);
+            if (reward && freeQuantity > 0) {
+              const freeCount = Math.min(reward.quantity, freeQuantity);
+              ruleDiscount += freeCount * (Number(reward.unitPrice) || 0);
+              freeQuantity -= freeCount;
+            }
+          });
+        }
+      }
+      if (type === 'combo' && promotion.combo_product_ids) {
+        const ids = String(promotion.combo_product_ids).split(',').map(Number).filter(Boolean);
+        if (ids.length && ids.every(id => this.state.cart.some(item => Number(item.productId) === id))) {
+          const comboGross = ids.reduce((sum, id) => {
+            const item = this.state.cart.find(line => Number(line.productId) === id);
+            return sum + (Number(item.unitPrice) || 0);
+          }, 0);
+          ruleDiscount += Math.max(0, comboGross - Number(promotion.discount_value || 0));
+        }
+      }
+    });
+
+    const selectedPromotion = (window.POS_ORDER_PROMOTIONS || []).find(promotion => String(promotion.id) === String(this.state.promotionId));
+    if (selectedPromotion) {
+      const qualifies = selectedPromotion.promotion_type !== 'minimum_spend' || subtotal >= Number(selectedPromotion.minimum_spend || 0);
+      if (qualifies) {
+        const selectedDiscount = selectedPromotion.discount_type === 'percentage'
+          ? eligibleSubtotal * Number(selectedPromotion.discount_value || 0) / 100
+          : Number(selectedPromotion.discount_value || 0);
+        orderDiscount = Math.min(eligibleSubtotal, Math.max(0, selectedDiscount));
       }
     }
-  });
-  const selectedPromotion = (window.POS_ORDER_PROMOTIONS || []).find(promotion => String(promotion.id) === String(this.state.promotionId));
-  if (selectedPromotion) {
-    const qualifies = selectedPromotion.promotion_type !== 'minimum_spend' || subtotal >= Number(selectedPromotion.minimum_spend || 0);
-    if (qualifies) {
-      const selectedDiscount = selectedPromotion.discount_type === 'percentage'
-        ? eligibleSubtotal * Number(selectedPromotion.discount_value || 0) / 100
-        : Number(selectedPromotion.discount_value || 0);
-      orderDiscount = Math.min(eligibleSubtotal, Math.max(0, selectedDiscount));
-    }
-  }
-  orderDiscount = Math.max(orderDiscount, Math.min(eligibleSubtotal, ruleDiscount));
-  const discount = productDiscount + orderDiscount;
 
-  const netSubtotal = Math.max(0, afterProductDiscount - orderDiscount);
-  const taxAmount = netSubtotal * (this.state.taxRate || 0) / 100;
-  const serviceCharge = netSubtotal * (this.state.serviceChargeRate || 0) / 100;
-  const grandTotal = netSubtotal + taxAmount + serviceCharge;
+    orderDiscount = Math.max(orderDiscount, Math.min(eligibleSubtotal, ruleDiscount));
+    const discount = productDiscount + orderDiscount;
 
-  return {
-    subtotal,
-    productDiscount,
-    orderDiscount,
-    discount,
-    taxAmount,
-    serviceCharge,
-    grandTotal
-  };
-},
+    const netSubtotal = Math.max(0, afterProductDiscount - orderDiscount);
+    const taxAmount = netSubtotal * (this.state.taxRate || 0) / 100;
+    const serviceCharge = netSubtotal * (this.state.serviceChargeRate || 0) / 100;
+    const grandTotal = netSubtotal + taxAmount + serviceCharge;
+
+    return {
+      subtotal,
+      productDiscount,
+      orderDiscount,
+      discount,
+      taxAmount,
+      serviceCharge,
+      grandTotal
+    };
+  },
 
   renderCart() {
     const cartContainer = document.getElementById('pos-cart-items');
@@ -564,7 +558,6 @@ getCalculations() {
               ${modsBadges ? `<div class="mt-1.5 flex flex-wrap">${modsBadges}</div>` : ''}
               ${notesHtml}
             </div>
-
             <div class="flex flex-col items-end gap-1.5">
               <span class="font-bold text-stone-900 text-sm">${this.state.currencySymbol} ${itemTotal.toFixed(2)}</span>
               <div class="flex items-center border border-stone-300 rounded-lg overflow-hidden bg-white shadow-xs">
@@ -582,20 +575,17 @@ getCalculations() {
       });
     }
 
-    // Update Summary Box
     document.getElementById('pos-subtotal').textContent = `${this.state.currencySymbol} ${calc.subtotal.toFixed(2)}`;
     document.getElementById('pos-promotion-discount').textContent = `-${this.state.currencySymbol} ${calc.productDiscount.toFixed(2)}`;
     document.getElementById('pos-normal-discount').textContent = `-${this.state.currencySymbol} ${calc.orderDiscount.toFixed(2)}`;
     const totalDiscountElement = document.getElementById('pos-total-discount');
     if (totalDiscountElement) totalDiscountElement.textContent = `-${this.state.currencySymbol} ${calc.discount.toFixed(2)}`;
     document.getElementById('pos-grand-total').textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
-    
-    // Bottom Pay Button
+
     const payBtnTotal = document.getElementById('pos-pay-btn-amount');
     if (payBtnTotal) payBtnTotal.textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
   },
 
-  // Checkout & Payment
   openCheckoutModal() {
     if (this.state.cart.length === 0) {
       Toast.warning('Cart is empty. Please add items to checkout.');
@@ -605,10 +595,10 @@ getCalculations() {
     const calc = this.getCalculations();
     document.getElementById('pay-modal-total').textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
     document.getElementById('pay-cash-tendered').value = calc.grandTotal.toFixed(2);
-    
+
     this.calculateChange();
     this.renderPresetCashButtons(calc.grandTotal);
-    
+
     openModal('pos-checkout-modal');
   },
 
@@ -616,12 +606,11 @@ getCalculations() {
     const presetsContainer = document.getElementById('pay-preset-buttons');
     if (!presetsContainer) return;
 
-    // Sri Lanka Rupee standard notes: 500, 1000, 2000, 5000
     const rounded500 = Math.ceil(total / 500) * 500;
     const rounded1000 = Math.ceil(total / 1000) * 1000;
     const rounded2000 = Math.ceil(total / 2000) * 2000;
     const rounded5000 = Math.ceil(total / 5000) * 5000;
-    
+
     const amounts = Array.from(new Set([total, rounded500, rounded1000, rounded2000, rounded5000, 5000])).filter(a => a >= total).slice(0, 4);
 
     presetsContainer.innerHTML = '';
@@ -643,9 +632,9 @@ getCalculations() {
     const calc = this.getCalculations();
     const tendered = parseFloat(document.getElementById('pay-cash-tendered').value) || 0;
     const change = Math.max(0, tendered - calc.grandTotal);
-    
+
     document.getElementById('pay-change-amount').textContent = `${this.state.currencySymbol} ${change.toFixed(2)}`;
-    
+
     const changeBox = document.getElementById('pay-change-box');
     if (tendered < calc.grandTotal) {
       changeBox.classList.add('bg-rose-50', 'border-rose-200');
@@ -661,10 +650,9 @@ getCalculations() {
     }
   },
 
-  // Submit Order to Backend
   async submitOrder(paymentMethod = 'cash') {
     if (this.state.cart.length === 0) return;
-    
+
     const calc = this.getCalculations();
     const tendered = parseFloat(document.getElementById('pay-cash-tendered').value) || calc.grandTotal;
 
@@ -759,43 +747,62 @@ getCalculations() {
     openModal('receipt-success-modal');
   },
 
+  // ===================== PRINTING (QZ) =====================
   printReceiptDirect(orderId) {
     if (window.qz && window.QZ_PRINT_SETTINGS) {
       this.printReceiptsToConfiguredPrinters(orderId).catch((error) => {
-        console.error('Direct printer error:', error);
-        Toast.error('Direct printing unavailable. Opening print dialogs instead.');
+        console.error('QZ Direct Print Error:', error);
+        Toast.error('QZ printing failed. Opening browser print instead.');
         this.openReceiptPrintDialogs(orderId);
       });
       return;
     }
 
+    console.warn('QZ not available');
+    Toast.warning('QZ Tray not detected. Using browser print.');
     this.openReceiptPrintDialogs(orderId);
   },
 
   openReceiptPrintDialogs(orderId) {
-    const printWindow = window.open(`print_receipt.php?id=${orderId}&copy=main&print_next=1&auto_print=1`, '_blank', 'width=400,height=600');
+    const printWindow = window.open(
+      `print_receipt.php?id=${orderId}&copy=main&print_next=1&auto_print=1`,
+      '_blank',
+      'width=400,height=600'
+    );
     if (printWindow) printWindow.focus();
   },
 
   async printReceiptsToConfiguredPrinters(orderId) {
-    if (!qz.websocket.isActive()) {
-      await qz.websocket.connect();
+    try {
+      if (!qz.websocket.isActive()) {
+        console.log('Connecting to QZ Tray...');
+        await qz.websocket.connect();
+      }
+
+      const printCopy = async (copy, printerName) => {
+        console.log(`Printing ${copy} → ${printerName}`);
+        const receiptHtml = await this.loadReceiptDocument(orderId, copy);
+
+        const printerConfig = qz.configs.create(printerName);
+
+        await qz.print(printerConfig, [{
+          type: 'html',
+          format: 'plain',
+          data: receiptHtml
+        }]);
+
+        console.log(`${copy} printed successfully`);
+      };
+
+      await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
+      await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
+
+      await qz.websocket.disconnect();
+      Toast.success('Main bill and kitchen copy sent to printers.');
+    } catch (err) {
+      console.error('printReceiptsToConfiguredPrinters error:', err);
+      throw err;
     }
-
-    const printCopy = async (copy, printerName) => {
-      const receiptHtml = await this.loadReceiptDocument(orderId, copy);
-      const printerConfig = qz.configs.create(printerName);
-      await qz.print(printerConfig, [{
-        type: 'html',
-        format: 'plain',
-        data: receiptHtml
-      }]);
-    };
-
-    await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
-    await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
-    await qz.websocket.disconnect();
-    Toast.success('Main bill and kitchen copy sent to their printers.');
   },
 
   loadReceiptDocument(orderId, copy) {
@@ -803,6 +810,7 @@ getCalculations() {
       const frame = document.createElement('iframe');
       frame.hidden = true;
       frame.src = `print_receipt.php?id=${encodeURIComponent(orderId)}&copy=${copy}&embed=1`;
+
       frame.onload = () => {
         try {
           resolve(frame.contentDocument.documentElement.outerHTML);
@@ -812,14 +820,17 @@ getCalculations() {
           frame.remove();
         }
       };
+
       frame.onerror = () => {
         frame.remove();
         reject(new Error(`Could not load ${copy} receipt`));
       };
+
       document.body.appendChild(frame);
     });
   },
 
+  // ===================== HOLD ORDERS =====================
   async holdCurrentOrder() {
     if (this.state.cart.length === 0) {
       Toast.warning('Cannot hold an empty cart');
