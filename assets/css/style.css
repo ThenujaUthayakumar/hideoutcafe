@@ -165,8 +165,23 @@ body {
     font-family: "Courier New", Courier, monospace;
     font-size: 12px;
     line-height: 1.25;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
     color: #000000 !important;
     background: #ffffff !important;
+  }
+
+  #thermal-receipt-area *,
+  #thermal-receipt-area-kitchen * {
+    color: #000000 !important;
+    font-weight: 600 !important;
+  }
+
+  #thermal-receipt-area .receipt-brand,
+  #thermal-receipt-area .receipt-total-grand,
+  #thermal-receipt-area-kitchen .receipt-brand {
+    font-weight: 900 !important;
   }
 
   #thermal-receipt-area-kitchen {
@@ -185,10 +200,72 @@ body {
   margin: 0 auto;
   padding: 8px 8px;
   background: #ffffff;
-  color: #111827;
-  font-family: "Courier New", Courier, monospace;
-  font-size: 13px;
+  color: #000000;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
   border: 1px dashed #d1d5db;
+}
+
+.receipt-container .receipt-meta-value,
+.receipt-container .receipt-meta-inline > span,
+.receipt-container .receipt-items th {
+  font-weight: 700;
+}
+.receipt-container .receipt-brand,
+.receipt-container .receipt-total-grand {
+  font-weight: 900;
+}
+.receipt-items {
+  width: 100%;
+  margin: 4px 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.receipt-items th,
+.receipt-items td {
+  padding: 4px 0;
+  vertical-align: top;
+}
+.receipt-items th {
+  border-bottom: 1px solid #111827;
+  font-weight: 400;
+}
+.receipt-item-description {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.receipt-item-qty {
+  width: 10%;
+  text-align: center;
+  white-space: nowrap;
+}
+.receipt-item-amount {
+  width: 30%;
+  text-align: right;
+  white-space: nowrap;
+}
+.receipt-items-kitchen .receipt-item-qty {
+  width: 12%;
+  text-align: right;
+}
+.receipt-summary {
+  font-size: 13px;
+}
+.receipt-total-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+.receipt-total-grand {
+  font-size: 15px;
+  font-weight: 700;
+}
+.receipt-footer {
+  padding-top: 8px;
+  text-align: center;
 }
 .receipt-logo {
   display: block;

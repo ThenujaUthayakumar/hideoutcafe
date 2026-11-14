@@ -76,12 +76,14 @@ define('DB_PASS', '');
 Move or symlink the `cafe-pos` folder into your `htdocs` or `www` directory, then navigate to:
 `http://localhost/cafe-pos/`
 
+Clean page URLs (without `.php`) use Apache `mod_rewrite`; ensure it is enabled and `.htaccess` overrides are allowed. The PHP built-in server uses `router.php` as shown below; Nginx needs equivalent rewrite configuration.
+
 #### Option B: Using PHP Built-in Server
-Open your terminal in the `cafe-pos` directory and run:
+Open your terminal in the `cafe-pos` directory and run the router-enabled server:
 ```bash
-php -S localhost:8000
+php -S localhost:8080 router.php
 ```
-Then visit: `http://localhost:8000` in your web browser.
+Then visit: `http://localhost:8080` in your web browser. Restart an existing server with this command to enable clean page URLs.
 
 ---
 
