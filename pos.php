@@ -11,6 +11,7 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
 $user = currentUser();
 ensureProductDiscountSchema();
 ensureCustomerDobSchema();
+ensureModifierCategorySchema();
 ensurePromotionsSchema();
 $activePromotions = getActivePromotions();
 ensurePromotionsSchema();
@@ -43,7 +44,12 @@ foreach ($products as &$p) {
 }
 
 // Fetch Modifiers, Tables, Customers
-$modifiers = db()->fetchAll("SELECT * FROM modifiers WHERE status = 'active' ORDER BY category ASC, name ASC");
+$modifiers = db()->fetchAll(
+    "SELECT id, product_category_id, name, category, price
+     FROM modifiers
+     WHERE status = 'active' AND product_category_id IS NOT NULL
+     ORDER BY category ASC, name ASC"
+);
 $tables = db()->fetchAll("SELECT * FROM tables ORDER BY table_number ASC");
 $customers = db()->fetchAll("SELECT c.id, c.name, c.phone, c.loyalty_points, NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid') AS is_first_order FROM customers c ORDER BY c.id ASC LIMIT 50");
 
@@ -61,7 +67,7 @@ if ($preselectedTableId) {
 require_once __DIR__ . '/includes/header.php';
 ?>
 <script>
-  window.POS_MODIFIERS = <?= json_encode($modifiers) ?>;
+  window.POS_MODIFIERS = <?= json_encode($modifiers, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     window.POS_PROMOTIONS = [];
     window.POS_ORDER_PROMOTIONS = <?= json_encode($activePromotions) ?>;
   window.POS_SETTINGS = {
@@ -101,6 +107,13 @@ require_once __DIR__ . '/includes/header.php';
         <div class="flex-1 overflow-y-auto p-4 sm:p-5">
             <div id="pos-products-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4">
                 <?php foreach ($products as $prod): ?>
+                    <?php
+                    $displayPrice = (float)$prod['price'];
+                    $showStartingPrice = $displayPrice <= 0 && !empty($prod['variants']);
+                    if ($showStartingPrice) {
+                        $displayPrice = (float)$prod['variants'][0]['extra_price'];
+                    }
+                    ?>
                     <script type="application/json" id="product-raw-<?= $prod['id'] ?>"><?= json_encode($prod) ?></script>
                     <div onclick="PosApp.selectProduct(<?= $prod['id'] ?>)" data-category="<?= $prod['category_id'] ?>" data-name="<?= e($prod['name']) ?>" data-code="<?= e($prod['code']) ?>" class="pos-product-card bg-stone-900 border border-stone-800 rounded-2xl p-3 flex flex-col justify-between cursor-pointer hover:border-red-600 shadow-md group">
                         <div>
@@ -117,7 +130,7 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
                         <div class="mt-3 pt-2.5 border-t border-stone-800 flex items-center justify-between">
                             <div>
-                                <span class="text-sm sm:text-base font-black text-red-400"><?= $currency ?> <?= number_format($prod['price'], 2) ?></span>
+                                <span class="text-sm sm:text-base font-black text-red-400"><?= $showStartingPrice ? 'From ' : '' ?><?= $currency ?> <?= number_format($displayPrice, 2) ?></span>
                                 <?php if (getActiveProductDiscount($prod) > 0): ?><span class="block text-[10px] font-bold text-emerald-400">Discount active</span><?php endif; ?>
                                 <?php if (!empty($prod['variants'])): ?>
                                     <span class="block text-[10px] text-stone-500 font-semibold">+ Sizes</span>
@@ -229,8 +242,8 @@ require_once __DIR__ . '/includes/header.php';
                 <h4 class="text-xs font-extrabold uppercase text-stone-400 tracking-wider mb-2">Select Size / Variant</h4>
                 <div id="modal-variants-list" class="grid grid-cols-2 gap-2"></div>
             </div>
-            <div>
-                <h4 class="text-xs font-extrabold uppercase text-stone-400 tracking-wider mb-2">Milks, Syrups & Add-ons</h4>
+            <div id="modal-modifiers-section" class="hidden">
+                <h4 class="text-xs font-extrabold uppercase text-stone-400 tracking-wider mb-2">Optional Add-ons</h4>
                 <div id="modal-modifiers-list" class="grid grid-cols-2 gap-2"></div>
             </div>
             <div>
