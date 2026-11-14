@@ -20,6 +20,21 @@ const PosApp = {
     customerSearchSequence: 0
   },
 
+  escapeHtml(value) {
+    const entities = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return String(value == null ? '' : value).replace(/[&<>"']/g, character => entities[character]);
+  },
+
+  formatPrice(amount) {
+    return parseFloat((Number(amount) || 0).toFixed(2)).toString();
+  },
+
   init(settings = {}) {
     this.state.currencySymbol = settings.currencySymbol || 'Rs.';
     this.state.taxRate = parseFloat(settings.taxRate) || 0;
@@ -114,7 +129,9 @@ const PosApp = {
       const product = JSON.parse(rawData.textContent);
 
       const hasVariants = product.variants && product.variants.length > 0;
-      const hasModifiers = window.POS_MODIFIERS && window.POS_MODIFIERS.length > 0;
+      const hasModifiers = (window.POS_MODIFIERS || []).some(
+        modifier => Number(modifier.product_category_id) === Number(product.category_id)
+      );
 
       if (hasVariants || hasModifiers) {
         this.openModifierModal(product);
@@ -144,17 +161,27 @@ const PosApp = {
     this.state.selectedProductForModal = product;
 
     document.getElementById('modal-product-name').textContent = product.name;
-    document.getElementById('modal-product-price').textContent = `${this.state.currencySymbol} ${parseFloat(product.price).toFixed(2)}`;
+    const basePrice = parseFloat(product.price) || 0;
+    const variants = product.variants || [];
+    const showStartingPrice = basePrice <= 0 && variants.length > 0;
+    const displayPrice = showStartingPrice
+      ? Math.min(...variants.map(v => parseFloat(v.extra_price) || 0))
+      : basePrice;
+    document.getElementById('modal-product-price').textContent =
+      `${showStartingPrice ? 'From ' : ''}${this.state.currencySymbol} ${displayPrice.toFixed(2)}`;
     document.getElementById('modal-item-notes').value = '';
 
     const variantContainer = document.getElementById('modal-variants-list');
     if (variantContainer) {
       variantContainer.innerHTML = '';
-      if (product.variants && product.variants.length > 0) {
+      if (variants.length > 0) {
         document.getElementById('modal-variants-section').classList.remove('hidden');
-        product.variants.forEach((v, idx) => {
+        variants.forEach((v, idx) => {
           const isFirst = idx === 0;
-          const extraText = parseFloat(v.extra_price) > 0 ? ` (+${this.state.currencySymbol} ${parseFloat(v.extra_price).toFixed(2)})` : '';
+          const variantPrice = parseFloat(v.extra_price) || 0;
+          const extraText = showStartingPrice
+            ? `${this.state.currencySymbol} ${variantPrice.toFixed(2)}`
+            : variantPrice > 0 ? ` (+${this.state.currencySymbol} ${variantPrice.toFixed(2)})` : '';
           variantContainer.innerHTML += `
             <label class="flex items-center justify-between p-3 border rounded-xl cursor-pointer hover:border-red-600 transition bg-stone-50 has-[:checked]:bg-red-50 has-[:checked]:border-red-600">
               <div class="flex items-center gap-3">
@@ -171,15 +198,21 @@ const PosApp = {
     }
 
     const modContainer = document.getElementById('modal-modifiers-list');
-    if (modContainer && window.POS_MODIFIERS) {
+    const productModifiers = (window.POS_MODIFIERS || []).filter(
+      modifier => Number(modifier.product_category_id) === Number(product.category_id)
+    );
+    const modifierSection = document.getElementById('modal-modifiers-section');
+    if (modContainer) {
       modContainer.innerHTML = '';
-      window.POS_MODIFIERS.forEach(mod => {
+      if (modifierSection) modifierSection.classList.toggle('hidden', productModifiers.length === 0);
+      productModifiers.forEach(mod => {
         const priceText = parseFloat(mod.price) > 0 ? `+${this.state.currencySymbol} ${parseFloat(mod.price).toFixed(2)}` : 'Free';
+        const modifierName = this.escapeHtml(mod.name);
         modContainer.innerHTML += `
           <label class="flex items-center justify-between p-2.5 border rounded-xl cursor-pointer hover:border-red-600 transition bg-white text-xs has-[:checked]:bg-red-50 has-[:checked]:border-red-600">
             <div class="flex items-center gap-2">
-              <input type="checkbox" name="modal_modifier" value="${mod.id}" data-name="${mod.name}" data-price="${mod.price}" class="w-4 h-4 text-red-600 rounded focus:ring-red-600">
-              <span class="font-medium text-stone-800">${mod.name}</span>
+              <input type="checkbox" name="modal_modifier" value="${Number(mod.id)}" data-name="${modifierName}" data-price="${Number(mod.price) || 0}" class="w-4 h-4 text-red-600 rounded focus:ring-red-600">
+              <span class="font-medium text-stone-800">${modifierName}</span>
             </div>
             <span class="font-bold text-red-700">${priceText}</span>
           </label>
@@ -534,8 +567,9 @@ const PosApp = {
         let modsBadges = '';
         if (item.modifiers && item.modifiers.length > 0) {
           modsBadges = item.modifiers.map(m => {
-            modTotal += parseFloat(m.price || 0);
-            return `<span class="inline-block bg-red-100 text-red-900 text-[10px] px-1.5 py-0.5 rounded font-medium mr-1 mb-1">+ ${m.name}</span>`;
+            const modifierPrice = parseFloat(m.price || 0);
+            modTotal += modifierPrice;
+            return `<span class="inline-block bg-red-100 text-red-900 text-[10px] px-1.5 py-0.5 rounded font-medium mr-1 mb-1">+ ${this.escapeHtml(m.name)} ${this.formatPrice(modifierPrice)}</span>`;
           }).join('');
         }
 
@@ -547,19 +581,25 @@ const PosApp = {
           ? Math.min(itemSubtotal, item.discountType === 'fixed' ? item.discountValue * item.quantity : itemSubtotal * item.discountValue / 100)
           : 0;
         const itemTotal = itemSubtotal - itemDiscount;
-        const variantHtml = item.variantName ? `<span class="text-xs text-stone-500 font-normal">(${item.variantName})</span>` : '';
+        const variantHtml = item.variantName
+          ? `<span class="text-xs text-stone-500 font-normal">${this.escapeHtml(item.variantName)} · ${this.formatPrice(item.unitPrice)}</span>`
+          : '';
+        const basePriceHtml = !item.variantName
+          ? `<p class="text-xs font-bold text-red-600 mt-0.5">${this.formatPrice(item.unitPrice)}</p>`
+          : '';
         const notesHtml = item.notes ? `<p class="text-[11px] text-red-600 italic mt-0.5"><i class="fa-regular fa-note-sticky mr-1"></i>${item.notes}</p>` : '';
 
         cartContainer.innerHTML += `
           <div class="flex items-start justify-between p-3 border-b border-stone-100 hover:bg-stone-50 transition group">
             <div class="flex-1 pr-2">
               <h4 class="font-semibold text-stone-800 text-sm leading-tight">${item.name} ${variantHtml}</h4>
-              <p class="text-xs font-bold text-red-600 mt-0.5">${this.state.currencySymbol} ${item.unitPrice.toFixed(2)}</p>
+              ${basePriceHtml}
               ${modsBadges ? `<div class="mt-1.5 flex flex-wrap">${modsBadges}</div>` : ''}
               ${notesHtml}
             </div>
             <div class="flex flex-col items-end gap-1.5">
-              <span class="font-bold text-stone-900 text-sm">${this.state.currencySymbol} ${itemTotal.toFixed(2)}</span>
+              <span class="text-[10px] font-semibold text-stone-500">Line total</span>
+              <span class="font-bold text-stone-900 text-sm">${this.formatPrice(itemTotal)}</span>
               <div class="flex items-center border border-stone-300 rounded-lg overflow-hidden bg-white shadow-xs">
                 <button onclick="PosApp.updateQuantity(${index}, -1)" class="w-6 h-6 flex items-center justify-center text-stone-600 hover:bg-stone-100 active:bg-stone-200">
                   <i class="fa-solid fa-minus text-[10px]"></i>

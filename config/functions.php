@@ -171,6 +171,36 @@ function ensureProductDiscountSchema(): void {
     }
 }
 
+function ensureModifierCategorySchema(): void {
+    static $checked = false;
+    if ($checked) return;
+
+    $columns = db()->fetchAll("SHOW COLUMNS FROM modifiers");
+    $existing = array_column($columns, 'Field');
+    if (!in_array('product_category_id', $existing, true)) {
+        db()->query("ALTER TABLE modifiers ADD COLUMN product_category_id INT NULL DEFAULT NULL AFTER id");
+    }
+
+    $categoryIndex = db()->fetchOne("SHOW INDEX FROM modifiers WHERE Key_name = 'idx_modifiers_product_category_id'");
+    if (!$categoryIndex) {
+        db()->query("ALTER TABLE modifiers ADD INDEX idx_modifiers_product_category_id (product_category_id)");
+    }
+
+    $categoryForeignKey = db()->fetchOne(
+        "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'modifiers'
+         AND COLUMN_NAME = 'product_category_id' AND REFERENCED_TABLE_NAME = 'categories' LIMIT 1"
+    );
+    if (!$categoryForeignKey) {
+        db()->query(
+            "ALTER TABLE modifiers ADD CONSTRAINT fk_modifiers_product_category
+             FOREIGN KEY (product_category_id) REFERENCES categories(id) ON DELETE SET NULL"
+        );
+    }
+
+    $checked = true;
+}
+
 function getActiveProductDiscount(array $product, ?int $timestamp = null): float {
     $value = max(0, (float)($product['discount_value'] ?? 0));
     if ($value <= 0) return 0.0;

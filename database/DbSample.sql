@@ -84,10 +84,13 @@ CREATE TABLE `product_variants` (
 
 CREATE TABLE `modifiers` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `product_category_id` INT NULL DEFAULT NULL,
   `name` VARCHAR(100) NOT NULL,
   `category` VARCHAR(50) NOT NULL DEFAULT 'General',
   `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active'
+  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+  KEY `idx_modifiers_product_category_id` (`product_category_id`),
+  CONSTRAINT `fk_modifiers_product_category` FOREIGN KEY (`product_category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `tables` (

@@ -60,11 +60,10 @@ $page = basename($_SERVER['PHP_SELF'], '.php');
                     <span>Promotions</span>
                 </a>
                 <?php endif; ?>
-<!-- 
                 <a href="<?= BASE_URL ?>/modifiers.php" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition <?= $page === 'modifiers' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'text-stone-400 hover:bg-stone-900 hover:text-white' ?>">
                     <i class="fa-solid fa-wand-magic-sparkles text-sm w-5 <?= $page === 'modifiers' ? 'text-white' : 'text-stone-500' ?>"></i>
-                    <span>Modifiers & Add-ons</span>
-                </a> -->
+                    <span>Modifier</span>
+                </a>
             </div>
         </div>
         <?php endif; ?>

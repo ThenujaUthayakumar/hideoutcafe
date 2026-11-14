@@ -15,7 +15,7 @@ A high-performance, modern, and beautiful Point of Sale (POS) and cafe managemen
 2. **Interactive Cafe POS Terminal (`pos.php`)**:
    - Touch and keyboard-friendly layout with instant category ribbons.
    - Real-time product search with barcode & SKU matching.
-   - **Item Customization Modal**: Choose drink size (Small, Regular, Large), plant milks (Oat, Almond, Soy, Coconut), artisan syrups (Vanilla, Caramel, Hazelnut), extra espresso shots, and sweetness/ice levels.
+   - **Item Customization Modal**: Choose drink sizes and optional add-ons scoped to the product category, with modifier type, option/flavour, and price.
    - **Dine-In, Takeaway & Delivery** order modes with visual table assignment.
    - Quick cash payment calculator with preset denomination buttons ($10, $20, $50, $100, Exact) and live return change calculator.
    - Split payments, Card/POS terminal, and UPI/QR code payment modes.

@@ -8,6 +8,9 @@ if (!isset($settings)) {
 $currency = $settings['currency_symbol'] ?? 'Rs.';
 $promotionDiscount = (float)($order['promotion_discount'] ?? 0);
 $normalDiscount = (float)($order['normal_discount'] ?? max(0, (float)($order['discount_amount'] ?? 0) - $promotionDiscount));
+$formatReceiptAmount = static function ($amount): string {
+    return rtrim(rtrim(number_format((float)$amount, 2, '.', ''), '0'), '.');
+};
 ?>
 <div class="receipt-container" id="thermal-receipt-area">
     <!-- Header / Brand -->
@@ -49,26 +52,25 @@ $normalDiscount = (float)($order['normal_discount'] ?? max(0, (float)($order['di
             <tr class="border-b border-stone-800 pb-1">
                 <th class="py-0.5 font-normal">DESCRIPTION</th>
                 <th class="py-0.5 text-center font-normal">QTY</th>
-                <th class="py-0.5 text-right font-normal">AMOUNT</th>
+                <th class="py-0.5 text-right font-normal">LINE TOTAL</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($order['items'] as $item): ?>
+            <?php
+            $mods = !empty($item['modifiers_json']) ? json_decode($item['modifiers_json'], true) : [];
+            $priceBreakdown = !empty($item['variant_name'])
+                ? e($item['variant_name']) . ' · ' . $formatReceiptAmount($item['unit_price'])
+                : $formatReceiptAmount($item['unit_price']);
+            foreach (is_array($mods) ? $mods : [] as $modifier) {
+                $priceBreakdown .= ' + ' . e($modifier['name']) . ' ' . $formatReceiptAmount($modifier['price']);
+            }
+            ?>
             <tr>
                 <td class="py-1 align-top">
                     <div class="leading-tight"><?= e($item['product_name']) ?></div>
-                    <?php if (!empty($item['variant_name'])): ?>
-                        <div class="text-[11px] text-stone-500"><?= e($item['variant_name']) ?></div>
-                    <?php endif; ?>
-                    <?php 
-                    if (!empty($item['modifiers_json'])) {
-                        $mods = json_decode($item['modifiers_json'], true);
-                        if (!empty($mods)) {
-                            foreach ($mods as $m) {
-                                echo '<div class="text-[11px] text-stone-600 pl-1">+ ' . e($m['name']) . ' (' . $currency . ' ' . number_format($m['price'], 2) . ')</div>';
-                            }
-                        }
-                    }
+                    <div class="text-[11px] text-stone-600"><?= $priceBreakdown ?></div>
+                    <?php
                     if (!empty($item['notes'])) {
                         echo '<div class="text-[11px] italic text-stone-500">Note: ' . e($item['notes']) . '</div>';
                     }

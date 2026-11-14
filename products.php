@@ -99,7 +99,7 @@ if (!empty($search)) {
     $params[':product_name'] = "%$search%";
     $params[':product_code'] = "%$search%";
 }
-$sql .= " ORDER BY c.sort_order ASC, p.name ASC";
+$sql .= " ORDER BY c.sort_order ASC, p.id ASC";
 $countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($sql) filtered_products", $params);
 $totalProducts = (int)($countRow['total'] ?? 0);
 $totalPages = max(1, (int)ceil($totalProducts / $perPage));

@@ -137,7 +137,7 @@ $items = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id", [':id'
                                 if (!empty($mods)) {
                                     echo '<div class="text-[11px] text-red-700 font-medium mt-0.5">';
                                     foreach ($mods as $m) {
-                                        echo '<span class="mr-2">+ ' . e($m['name']) . ' (' . $currency . ' ' . number_format($m['price'], 2) . ')</span>';
+                                        echo '<span class="mr-2">+ ' . e($m['name']) . ' ' . number_format($m['price'], 2) . '</span>';
                                     }
                                     echo '</div>';
                                 }
