@@ -69,7 +69,9 @@ $formatReceiptAmount = static function ($amount): string {
             <tr>
                 <td class="py-1 align-top">
                     <div class="leading-tight"><?= e($item['product_name']) ?></div>
-                    <div class="text-[11px] text-stone-600"><?= $priceBreakdown ?></div>
+                    <?php if (!empty($item['variant_name']) || !empty($mods)): ?>
+                        <div class="text-[11px] text-stone-600"><?= $priceBreakdown ?></div>
+                    <?php endif; ?>
                     <?php
                     if (!empty($item['notes'])) {
                         echo '<div class="text-[11px] italic text-stone-500">Note: ' . e($item['notes']) . '</div>';
