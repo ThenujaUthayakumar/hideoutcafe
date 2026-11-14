@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-stone-500 pointer-events-none">
                             <i class="fa-solid fa-envelope text-sm"></i>
                         </span>
-                        <input type="text" name="identifier" id="login_identifier" required value="admin"
+                        <input type="text" name="identifier" id="login_identifier" required 
                                class="w-full pl-10 pr-4 py-3 bg-stone-800/80 border border-stone-700 rounded-xl text-white text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition placeholder-stone-500">
                     </div>
                 </div>
@@ -141,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-stone-500 pointer-events-none">
                             <i class="fa-solid fa-lock text-sm"></i>
                         </span>
-                        <input type="password" name="password" id="login_password" required value="admin123" 
+                        <input type="password" name="password" id="login_password" required 
                                class="w-full pl-10 pr-4 py-3 bg-stone-800/80 border border-stone-700 rounded-xl text-white text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition placeholder-stone-500">
                     </div>
                 </div>

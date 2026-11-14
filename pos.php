@@ -79,7 +79,7 @@ require_once __DIR__ . '/includes/header.php';
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-stone-500 pointer-events-none">
                         <i class="fa-solid fa-magnifying-glass"></i>
                     </span>
-                    <input type="text" id="pos-search-input" oninput="PosApp.onSearch(this.value)" placeholder="Search coffee, bakery, or SKU... (Press F1)" class="w-full pl-10 pr-10 py-2.5 bg-stone-900 border border-stone-800 rounded-xl text-sm font-medium text-white focus:bg-black focus:ring-2 focus:ring-red-600 focus:border-red-600 focus:outline-none transition placeholder-stone-500">
+                    <input type="text" id="pos-search-input" oninput="PosApp.onSearch(this.value)" placeholder="Search... (Press F1)" class="w-full pl-10 pr-10 py-2.5 bg-stone-900 border border-stone-800 rounded-xl text-sm font-medium text-white focus:bg-black focus:ring-2 focus:ring-red-600 focus:border-red-600 focus:outline-none transition placeholder-stone-500">
                     <span class="absolute inset-y-0 right-0 pr-3 flex items-center text-[10px] font-bold text-stone-500 pointer-events-none">F1</span>
                 </div>
                 <button onclick="PosApp.openHeldOrdersModal()" class="px-3.5 py-2.5 bg-stone-900 hover:bg-stone-800 text-stone-300 font-bold rounded-xl text-xs flex items-center gap-2 border border-stone-800 transition">
@@ -294,7 +294,7 @@ require_once __DIR__ . '/includes/header.php';
                 <button onclick="switchCustomerTab('new')" id="cust-tab-new-btn" class="flex-1 py-2 text-xs font-bold rounded-lg text-stone-400 hover:text-white">+ New Customer</button>
             </div>
             <div id="cust-section-search" class="space-y-3">
-                <input type="text" id="cust-search-input" oninput="searchCustomers(this.value)" placeholder="Search by name or phone..." class="w-full px-3.5 py-2.5 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white focus:bg-black focus:ring-2 focus:ring-red-600">
+                <input type="text" id="cust-search-input" oninput="PosApp.searchCustomers(this.value)" placeholder="Search by name or phone..." class="w-full px-3.5 py-2.5 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white focus:bg-black focus:ring-2 focus:ring-red-600">
                 <div id="cust-search-results" class="space-y-2 max-h-60 overflow-y-auto">
                     <?php foreach ($customers as $c): ?>
                     <div onclick="PosApp.selectCustomer({ id: <?= $c['id'] ?>, name: '<?= addslashes($c['name']) ?>', phone: '<?= e($c['phone']) ?>', points: <?= (float)$c['loyalty_points'] ?>, isFirstOrder: <?= $c['is_first_order'] ? 'true' : 'false' ?> })" class="flex items-center justify-between p-3 border border-stone-800 rounded-xl hover:border-red-600 hover:bg-stone-800/80 cursor-pointer transition">

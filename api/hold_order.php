@@ -27,9 +27,22 @@ if ($action === 'recall') {
     if (!$order) {
         jsonResponse(['success' => false, 'message' => 'Held order not found'], 404);
     }
+    $customer = null;
+    if (!empty($order['customer_id'])) {
+        $customer = db()->fetchOne(
+            "SELECT c.id, c.name, c.phone, c.loyalty_points AS points,
+                    NOT EXISTS (
+                        SELECT 1 FROM orders o
+                        WHERE o.customer_id = c.id AND o.payment_status = 'paid'
+                    ) AS is_first_order
+             FROM customers c
+             WHERE c.id = :customer_id",
+            [':customer_id' => $order['customer_id']]
+        );
+    }
     // Delete held order on recall
     db()->query("DELETE FROM held_orders WHERE id = :id", [':id' => $id]);
-    jsonResponse(['success' => true, 'order' => $order]);
+    jsonResponse(['success' => true, 'order' => $order, 'customer' => $customer]);
 }
 
 if ($action === 'delete') {
