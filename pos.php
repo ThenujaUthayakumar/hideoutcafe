@@ -180,7 +180,7 @@ require_once __DIR__ . '/includes/header.php';
                 </button>
             </div>
         </div>
-        <div id="pos-cart-items" class="flex-1 overflow-y-auto divide-y divide-stone-900 p-2"></div>
+        <div id="pos-cart-items" class="flex-1 overflow-y-auto space-y-2 p-2"></div>
         <div class="p-4 bg-stone-900/80 border-t border-stone-800 space-y-3">
             <div class="flex items-center justify-between text-xs">
                 <button onclick="openModal('discount-modal')" class="text-stone-300 hover:text-red-400 font-bold flex items-center gap-1.5">

@@ -10,6 +10,11 @@ $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
 $currentUser = currentUser();
 $isCashier = hasRole(ROLE_CASHIER);
+$statusFilter = $_SERVER['REQUEST_METHOD'] === 'POST' ? ($_POST['status'] ?? 'all') : ($_GET['status'] ?? 'all');
+if (!in_array($statusFilter, ['all', 'pending', 'completed', 'cancelled'], true)) {
+    $statusFilter = 'all';
+}
+$statusRedirect = $statusFilter === 'all' ? '' : '?status=' . rawurlencode($statusFilter);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireRole([ROLE_ADMIN, ROLE_MANAGER]);
@@ -18,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'refund_order') {
         if (!hasRole(ROLE_ADMIN)) {
             setFlash('error', 'Only Admin can refund orders.');
-            header("Location: " . BASE_URL . "/orders.php");
+            header("Location: " . BASE_URL . "/orders.php" . $statusRedirect);
             exit;
         }
         $orderId = (int)$_POST['order_id'];
@@ -60,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($db->getConnection()->inTransaction()) $db->rollBack();
             setFlash('error', $e->getMessage());
         }
-        header("Location: " . BASE_URL . "/orders.php");
+        header("Location: " . BASE_URL . "/orders.php" . $statusRedirect);
         exit;
     }
 
@@ -72,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($order) {
             if ($order['payment_status'] === 'paid' && !hasRole(ROLE_ADMIN)) {
                 setFlash('error', 'Only Admin can void or refund a paid order.');
-                header("Location: " . BASE_URL . "/orders.php");
+                header("Location: " . BASE_URL . "/orders.php" . $statusRedirect);
                 exit;
             }
             // Restore inventory
@@ -101,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             setFlash('success', "Order #{$order['invoice_no']} has been cancelled and stock restored.");
         }
-        header("Location: " . BASE_URL . "/orders.php");
+        header("Location: " . BASE_URL . "/orders.php" . $statusRedirect);
         exit;
     }
 }
@@ -153,6 +158,10 @@ if ($payFilter !== 'all') {
     $sql .= " AND o.payment_method = :p";
     $params[':p'] = $payFilter;
 }
+if ($statusFilter !== 'all') {
+    $sql .= " AND o.order_status = :status";
+    $params[':status'] = $statusFilter;
+}
 if (!empty($search)) {
     $sql .= " AND (o.invoice_no LIKE :order_invoice OR c.name LIKE :order_customer OR c.phone LIKE :order_phone)";
     $params[':order_invoice'] = "%$search%";
@@ -190,6 +199,10 @@ if ($typeFilter !== 'all') {
 if ($payFilter !== 'all') {
     $summarySql .= " AND o.payment_method = :summary_payment";
     $summaryParams[':summary_payment'] = $payFilter;
+}
+if ($statusFilter !== 'all') {
+    $summarySql .= " AND o.order_status = :summary_status";
+    $summaryParams[':summary_status'] = $statusFilter;
 }
 if (!empty($search)) {
     $summarySql .= " AND (o.invoice_no LIKE :summary_invoice OR c.name LIKE :summary_customer OR c.phone LIKE :summary_phone)";
@@ -249,6 +262,15 @@ require_once __DIR__ . '/includes/sidebar.php';
                         <option value="upi" <?= $payFilter === 'upi' ? 'selected' : '' ?>>QR / UPI</option>
                     </select>
                 </div>
+                <div>
+                    <label class="block font-bold text-stone-300 mb-1">Order Status</label>
+                    <select name="status" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white">
+                        <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>All Statuses</option>
+                        <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
+                        <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
+                        <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                    </select>
+                </div>
                 <?php if (!$isCashier): ?>
                 <div>
                     <label class="block font-bold text-stone-300 mb-1">User</label>
@@ -270,7 +292,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     <button type="submit" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-md transition">
                         <i class="fa-solid fa-filter mr-1"></i> Filter
                     </button>
-                    <?php if ($search !== '' || $typeFilter !== 'all' || $payFilter !== 'all' || $userFilter > 0 || $startDate !== date('Y-m-d') || $endDate !== date('Y-m-d')): ?>
+                    <?php if ($search !== '' || $typeFilter !== 'all' || $payFilter !== 'all' || $statusFilter !== 'all' || $userFilter > 0 || $startDate !== date('Y-m-d') || $endDate !== date('Y-m-d')): ?>
                         <a href="<?= BASE_URL ?>/orders.php" class="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold rounded-xl text-center transition">Clear</a>
                     <?php endif; ?>
                 </div>
@@ -349,10 +371,10 @@ require_once __DIR__ . '/includes/sidebar.php';
                                 <td class="p-3.5 text-right font-black text-red-400 text-sm"><?= $currency ?> <?= number_format($o['grand_total'], 2) ?></td>
                                 <td class="p-3.5 text-center">
                                     <div class="flex items-center justify-center gap-1">
-                                        <a href="<?= BASE_URL ?>/order_view.php?id=<?= $o['id'] ?>" class="p-1.5 hover:bg-stone-800 rounded-lg text-stone-300 transition" title="View Full Invoice">
+                                        <a href="<?= BASE_URL ?>/order_view.php?id=<?= $o['id'] ?><?= $statusFilter !== 'all' ? '&amp;status=' . rawurlencode($statusFilter) : '' ?>" class="p-1.5 hover:bg-stone-800 rounded-lg text-stone-300 transition" title="View Full Invoice">
                                             <i class="fa-solid fa-eye"></i>
                                         </a>
-                                        <a href="<?= BASE_URL ?>/print_receipt.php?id=<?= $o['id'] ?>" target="_blank" class="p-1.5 hover:bg-stone-800 rounded-lg text-red-400 transition" title="Reprint Thermal Slip">
+                                        <a href="<?= BASE_URL ?>/print_receipt.php?id=<?= $o['id'] ?><?= $statusFilter !== 'all' ? '&amp;status=' . rawurlencode($statusFilter) : '' ?>" target="_blank" class="p-1.5 hover:bg-stone-800 rounded-lg text-red-400 transition" title="Reprint Thermal Slip">
                                             <i class="fa-solid fa-print"></i>
                                         </a>
                                         <?php if ($o['payment_status'] === 'paid' && $o['order_status'] !== 'cancelled' && hasRole(ROLE_ADMIN)): ?>
@@ -373,7 +395,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     </tbody>
                 </table>
             </div>
-            <?= renderPagination($page, $totalOrders, $perPage, ['start_date' => $startDate, 'end_date' => $endDate, 'type' => $typeFilter, 'payment' => $payFilter, 'user_id' => $userFilter, 'q' => $search], true) ?>
+            <?= renderPagination($page, $totalOrders, $perPage, ['start_date' => $startDate, 'end_date' => $endDate, 'type' => $typeFilter, 'payment' => $payFilter, 'status' => $statusFilter, 'user_id' => $userFilter, 'q' => $search], true) ?>
         </div>
 
     </div>
@@ -383,12 +405,14 @@ require_once __DIR__ . '/includes/sidebar.php';
     <input type="hidden" name="action" value="cancel_order">
     <input type="hidden" name="order_id" id="void_order_id">
     <input type="hidden" name="cancel_reason" id="void_cancel_reason">
+    <input type="hidden" name="status" value="<?= e($statusFilter) ?>">
 </form>
 
 <form id="refund-order-form" method="POST" action="orders.php" class="hidden">
     <input type="hidden" name="action" value="refund_order">
     <input type="hidden" name="order_id" id="refund_order_id">
     <input type="hidden" name="refund_reason" id="refund_reason">
+    <input type="hidden" name="status" value="<?= e($statusFilter) ?>">
 </form>
 
 <script>

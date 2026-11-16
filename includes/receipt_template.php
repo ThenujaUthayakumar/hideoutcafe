@@ -52,7 +52,7 @@ $formatReceiptAmount = static function ($amount): string {
             <tr class="border-b border-stone-800 pb-1">
                 <th class="py-0.5 font-normal">DESCRIPTION</th>
                 <th class="py-0.5 text-center font-normal">QTY</th>
-                <th class="py-0.5 text-right font-normal">LINE TOTAL</th>
+                <th class="py-0.5 text-right font-normal">TOTAL</th>
             </tr>
         </thead>
         <tbody>
@@ -97,7 +97,7 @@ $formatReceiptAmount = static function ($amount): string {
 
     <!-- Totals Summary -->
     <div class="text-sm space-y-1">
-        <div class="flex justify-between">
+        <div class="flex justify-between font-normal">
             <span>Subtotal:</span>
             <span> <?= number_format($order['subtotal'], 2) ?></span>
         </div>
@@ -125,7 +125,7 @@ $formatReceiptAmount = static function ($amount): string {
         <?php endif; ?>
         <div class="receipt-divider"></div>
         <?php if ($order['paid_amount'] > 0): ?>
-        <div class="flex justify-between">
+        <div class="flex justify-between font-normal">
             <span><?= e($order['payment_method']) ?></span>
             <span><?= number_format($order['paid_amount'], 2) ?></span>
         </div>

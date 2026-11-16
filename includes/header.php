@@ -146,7 +146,7 @@ $shiftHeaderAmount = $currentShift
                     <div class="hidden group-hover:block absolute right-0 mt-1 w-48 bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in duration-150">
                         <div class="px-4 py-2 border-b border-stone-800">
                             <p class="text-[10px] text-stone-400">Signed in as</p>
-                            <p class="text-xs font-bold text-stone-200 truncate"><?= e($user['email']) ?></p>
+                            <p class="text-xs font-bold text-stone-200 truncate"><?= e($user['name']) ?></p>
                         </div>
                         <?php if (hasRole([ROLE_ADMIN, ROLE_MANAGER])): ?>
                             <a href="<?= BASE_URL ?>/settings.php" class="flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-stone-300 hover:bg-stone-800 hover:text-red-400">

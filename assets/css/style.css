@@ -175,6 +175,9 @@ body {
   #thermal-receipt-area *,
   #thermal-receipt-area-kitchen * {
     color: #000000 !important;
+  }
+
+  #thermal-receipt-area-kitchen * {
     font-weight: 600 !important;
   }
 

@@ -294,6 +294,21 @@ const PosApp = {
     this.renderCart();
   },
 
+  setQuantity(index, value) {
+    const item = this.state.cart[index];
+    if (!item) return;
+
+    const quantity = Number(value);
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      this.renderCart();
+      return;
+    }
+
+    item.quantity = quantity;
+    SoundFX.click();
+    this.renderCart();
+  },
+
   removeItem(index) {
     if (!this.state.cart[index]) return;
     this.state.cart.splice(index, 1);
@@ -590,7 +605,7 @@ const PosApp = {
         const notesHtml = item.notes ? `<p class="text-[11px] text-red-600 italic mt-0.5"><i class="fa-regular fa-note-sticky mr-1"></i>${item.notes}</p>` : '';
 
         cartContainer.innerHTML += `
-          <div class="flex items-start justify-between p-3 border-b border-stone-100 hover:bg-stone-50 transition group">
+          <div class="flex items-start justify-between p-3 border border-stone-200 rounded-xl bg-white hover:bg-stone-50 transition group">
             <div class="flex-1 pr-2">
               <h4 class="font-semibold text-stone-800 text-sm leading-tight">${item.name} ${variantHtml}</h4>
               ${basePriceHtml}
@@ -604,7 +619,7 @@ const PosApp = {
                 <button onclick="PosApp.updateQuantity(${index}, -1)" class="w-6 h-6 flex items-center justify-center text-stone-600 hover:bg-stone-100 active:bg-stone-200">
                   <i class="fa-solid fa-minus text-[10px]"></i>
                 </button>
-                <span class="w-6 text-center text-xs font-bold text-stone-800">${item.quantity}</span>
+                <input type="number" min="1" step="1" inputmode="numeric" aria-label="Quantity for ${this.escapeHtml(item.name)}" onchange="PosApp.setQuantity(${index}, this.value)" value="${item.quantity}" class="w-12 h-7 text-center text-xs font-bold text-stone-800 border-x border-stone-200 focus:outline-none focus:ring-2 focus:ring-red-500">
                 <button onclick="PosApp.updateQuantity(${index}, 1)" class="w-6 h-6 flex items-center justify-center text-stone-600 hover:bg-stone-100 active:bg-stone-200">
                   <i class="fa-solid fa-plus text-[10px]"></i>
                 </button>
