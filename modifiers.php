@@ -8,27 +8,45 @@ requireRole([ROLE_ADMIN, ROLE_MANAGER]);
 $title = 'Modifiers & Add-ons';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+ensureModifierCategorySchema();
+$categories = db()->fetchAll("SELECT id, name FROM categories WHERE status = 'active' ORDER BY sort_order ASC, name ASC");
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save_modifier') {
         $id = !empty($_POST['modifier_id']) ? (int)$_POST['modifier_id'] : null;
-        $name = sanitize($_POST['name']);
-        $category = sanitize($_POST['category'] ?? 'Milk Option');
-        $price = (float)$_POST['price'];
+        $name = sanitize($_POST['name'] ?? '');
+        $category = sanitize($_POST['category'] ?? '');
+        $productCategoryId = (int)($_POST['product_category_id'] ?? 0);
+        $price = isset($_POST['price']) && is_numeric($_POST['price']) ? (float)$_POST['price'] : -1;
         $status = sanitize($_POST['status'] ?? 'active');
+        if ($name === '' || $category === '' || $price < 0 || !in_array($status, ['active', 'inactive'], true)) {
+            setFlash('error', 'Enter a modifier option, type, non-negative price, and valid status.');
+            header("Location: " . BASE_URL . "/modifiers.php");
+            exit;
+        }
+        $productCategory = db()->fetchOne(
+            "SELECT id FROM categories WHERE id = :id AND status = 'active'",
+            [':id' => $productCategoryId]
+        );
+
+        if (!$productCategory) {
+            setFlash('error', 'Select a valid active product category.');
+            header("Location: " . BASE_URL . "/modifiers.php");
+            exit;
+        }
 
         if ($id) {
             db()->query(
-                "UPDATE modifiers SET name = :name, category = :cat, price = :price, status = :st WHERE id = :id",
-                [':name' => $name, ':cat' => $category, ':price' => $price, ':st' => $status, ':id' => $id]
+                "UPDATE modifiers SET product_category_id = :product_category_id, name = :name, category = :cat, price = :price, status = :st WHERE id = :id",
+                [':product_category_id' => $productCategoryId, ':name' => $name, ':cat' => $category, ':price' => $price, ':st' => $status, ':id' => $id]
             );
             setFlash('success', "Modifier '$name' updated.");
         } else {
             db()->query(
-                "INSERT INTO modifiers (name, category, price, status) VALUES (:name, :cat, :price, :st)",
-                [':name' => $name, ':cat' => $category, ':price' => $price, ':st' => $status]
+                "INSERT INTO modifiers (product_category_id, name, category, price, status) VALUES (:product_category_id, :name, :cat, :price, :st)",
+                [':product_category_id' => $productCategoryId, ':name' => $name, ':cat' => $category, ':price' => $price, ':st' => $status]
             );
             setFlash('success', "New modifier '$name' added.");
         }
@@ -45,7 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$modifiers = db()->fetchAll("SELECT * FROM modifiers ORDER BY category ASC, name ASC");
+$modifiers = db()->fetchAll(
+    "SELECT m.*, c.name AS product_category_name
+     FROM modifiers m
+     LEFT JOIN categories c ON c.id = m.product_category_id
+     ORDER BY c.name ASC, m.category ASC, m.name ASC"
+);
 
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';
@@ -57,7 +80,7 @@ require_once __DIR__ . '/includes/sidebar.php';
         <div class="flex items-center justify-between">
             <div>
                 <h2 class="text-2xl font-black tracking-tight text-white">Modifiers & Add-ons</h2>
-                <p class="text-xs text-stone-400">Configure plant milks, espresso shots, artisanal syrups, and sweetness levels</p>
+                <p class="text-xs text-stone-400">Create optional add-ons for each product category, such as Popping Pearls with a Strawberry flavour.</p>
             </div>
             <button onclick="openModifierModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-red-900/40 transition">
                 <i class="fa-solid fa-plus"></i> Add Modifier
@@ -69,9 +92,10 @@ require_once __DIR__ . '/includes/sidebar.php';
                 <table class="w-full text-xs text-left">
                     <thead class="bg-stone-950 text-stone-400 font-bold uppercase text-[10px] tracking-wider border-b border-stone-800">
                         <tr>
-                            <th class="p-3.5">Add-on Name</th>
-                            <th class="p-3.5">Category Group</th>
-                            <th class="p-3.5 text-right">Extra Price</th>
+                            <th class="p-3.5">Product Category</th>
+                            <th class="p-3.5">Modifier Type</th>
+                            <th class="p-3.5">Option / Flavour</th>
+                            <th class="p-3.5 text-right">Price</th>
                             <th class="p-3.5 text-center">Status</th>
                             <th class="p-3.5 text-center">Actions</th>
                         </tr>
@@ -79,10 +103,11 @@ require_once __DIR__ . '/includes/sidebar.php';
                     <tbody class="divide-y divide-stone-800">
                         <?php foreach ($modifiers as $m): ?>
                         <tr class="hover:bg-stone-950/80 transition">
-                            <td class="p-3.5 font-bold text-white"><?= e($m['name']) ?></td>
                             <td class="p-3.5">
-                                <span class="px-2.5 py-0.5 rounded-lg bg-red-950 text-red-300 border border-red-900 font-bold text-[10px]"><?= e($m['category']) ?></span>
+                                <span class="px-2.5 py-0.5 rounded-lg bg-red-950 text-red-300 border border-red-900 font-bold text-[10px]"><?= e($m['product_category_name'] ?? 'Unassigned') ?></span>
                             </td>
+                            <td class="p-3.5 font-bold text-white"><?= e($m['category']) ?></td>
+                            <td class="p-3.5 text-stone-300"><?= e($m['name']) ?></td>
                             <td class="p-3.5 text-right font-black text-red-400 text-sm">
                                 <?= $m['price'] > 0 ? $currency . ' ' . number_format($m['price'], 2) : '<span class="text-emerald-400 font-bold">Free</span>' ?>
                             </td>
@@ -127,22 +152,24 @@ require_once __DIR__ . '/includes/sidebar.php';
             <input type="hidden" name="modifier_id" id="mod_form_id">
 
             <div>
-                <label class="block text-xs font-bold text-stone-300 mb-1">Modifier Name *</label>
-                <input type="text" name="name" id="mod_form_name" placeholder="e.g. Oat Milk" required class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-stone-300 mb-1">Category Group *</label>
-                <select name="category" id="mod_form_cat" required class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
-                    <option value="Milk Option">Milk Option</option>
-                    <option value="Coffee Add-on">Coffee Add-on</option>
-                    <option value="Flavors & Syrups">Flavors & Syrups</option>
-                    <option value="Topping">Topping</option>
-                    <option value="Sweetness">Sweetness</option>
-                    <option value="Temperature">Temperature</option>
+                <label class="block text-xs font-bold text-stone-300 mb-1">Product Category *</label>
+                <select name="product_category_id" id="mod_form_product_category" required class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                    <option value="">Select a product category</option>
+                    <?php foreach ($categories as $category): ?>
+                        <option value="<?= (int)$category['id'] ?>"><?= e($category['name']) ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-300 mb-1">Extra Price (<?= $currency ?>) *</label>
+                <label class="block text-xs font-bold text-stone-300 mb-1">Modifier Type *</label>
+                <input type="text" name="category" id="mod_form_cat" maxlength="50" placeholder="e.g. Popping Pearls" required class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-stone-300 mb-1">Option / Flavour *</label>
+                <input type="text" name="name" id="mod_form_name" maxlength="100" placeholder="e.g. Strawberry" required class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-stone-300 mb-1">Price (<?= $currency ?>) *</label>
                 <input type="number" step="0.01" min="0" name="price" id="mod_form_price" value="0.00" required class="w-full px-3.5 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs font-bold text-red-400">
             </div>
 
@@ -158,6 +185,8 @@ require_once __DIR__ . '/includes/sidebar.php';
 function openModifierModal() {
   document.getElementById('modifier-modal-title').textContent = 'Add Modifier';
   document.getElementById('mod_form_id').value = '';
+  document.getElementById('mod_form_product_category').value = '';
+  document.getElementById('mod_form_cat').value = '';
   document.getElementById('mod_form_name').value = '';
   document.getElementById('mod_form_price').value = '0.00';
   openModal('modifier-form-modal');
@@ -165,6 +194,7 @@ function openModifierModal() {
 function editModifier(m) {
   document.getElementById('modifier-modal-title').textContent = 'Edit Modifier: ' + m.name;
   document.getElementById('mod_form_id').value = m.id;
+  document.getElementById('mod_form_product_category').value = m.product_category_id || '';
   document.getElementById('mod_form_name').value = m.name;
   document.getElementById('mod_form_cat').value = m.category;
   document.getElementById('mod_form_price').value = m.price;

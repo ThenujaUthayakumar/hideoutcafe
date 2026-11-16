@@ -1,5 +1,6 @@
 ﻿/**
  * The Hide Out Cafe - Main Point of Sale Interactive Engine
+ * (Clean + Fixed version)
  */
 
 const PosApp = {
@@ -15,14 +16,30 @@ const PosApp = {
     currencySymbol: 'Rs.',
     activeCategoryId: 'all',
     searchQuery: '',
-    selectedProductForModal: null
+    selectedProductForModal: null,
+    customerSearchSequence: 0
+  },
+
+  escapeHtml(value) {
+    const entities = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return String(value == null ? '' : value).replace(/[&<>"']/g, character => entities[character]);
+  },
+
+  formatPrice(amount) {
+    return parseFloat((Number(amount) || 0).toFixed(2)).toString();
   },
 
   init(settings = {}) {
     this.state.currencySymbol = settings.currencySymbol || 'Rs.';
     this.state.taxRate = parseFloat(settings.taxRate) || 0;
     this.state.serviceChargeRate = parseFloat(settings.serviceChargeRate) || 0;
-    
+
     this.bindKeyboardShortcuts();
     this.renderCart();
     this.filterProducts();
@@ -33,7 +50,7 @@ const PosApp = {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) && e.key !== 'F2' && e.key !== 'Escape') {
         return;
       }
-      
+
       switch (e.key) {
         case 'F1':
           e.preventDefault();
@@ -59,7 +76,6 @@ const PosApp = {
     });
   },
 
-  // Category Filtering
   setCategory(catId) {
     this.state.activeCategoryId = catId;
     document.querySelectorAll('.cat-pill').forEach(btn => {
@@ -108,12 +124,14 @@ const PosApp = {
   selectProduct(productId) {
     const rawData = document.getElementById(`product-raw-${productId}`);
     if (!rawData) return;
-    
+
     try {
       const product = JSON.parse(rawData.textContent);
-      
+
       const hasVariants = product.variants && product.variants.length > 0;
-      const hasModifiers = window.POS_MODIFIERS && window.POS_MODIFIERS.length > 0;
+      const hasModifiers = (window.POS_MODIFIERS || []).some(
+        modifier => Number(modifier.product_category_id) === Number(product.category_id)
+      );
 
       if (hasVariants || hasModifiers) {
         this.openModifierModal(product);
@@ -141,20 +159,29 @@ const PosApp = {
 
   openModifierModal(product) {
     this.state.selectedProductForModal = product;
-    
+
     document.getElementById('modal-product-name').textContent = product.name;
-    document.getElementById('modal-product-price').textContent = `${this.state.currencySymbol} ${parseFloat(product.price).toFixed(2)}`;
+    const basePrice = parseFloat(product.price) || 0;
+    const variants = product.variants || [];
+    const showStartingPrice = basePrice <= 0 && variants.length > 0;
+    const displayPrice = showStartingPrice
+      ? Math.min(...variants.map(v => parseFloat(v.extra_price) || 0))
+      : basePrice;
+    document.getElementById('modal-product-price').textContent =
+      `${showStartingPrice ? 'From ' : ''}${this.state.currencySymbol} ${displayPrice.toFixed(2)}`;
     document.getElementById('modal-item-notes').value = '';
 
-    // Render Variants
     const variantContainer = document.getElementById('modal-variants-list');
     if (variantContainer) {
       variantContainer.innerHTML = '';
-      if (product.variants && product.variants.length > 0) {
+      if (variants.length > 0) {
         document.getElementById('modal-variants-section').classList.remove('hidden');
-        product.variants.forEach((v, idx) => {
+        variants.forEach((v, idx) => {
           const isFirst = idx === 0;
-          const extraText = parseFloat(v.extra_price) > 0 ? ` (+${this.state.currencySymbol} ${parseFloat(v.extra_price).toFixed(2)})` : '';
+          const variantPrice = parseFloat(v.extra_price) || 0;
+          const extraText = showStartingPrice
+            ? `${this.state.currencySymbol} ${variantPrice.toFixed(2)}`
+            : variantPrice > 0 ? ` (+${this.state.currencySymbol} ${variantPrice.toFixed(2)})` : '';
           variantContainer.innerHTML += `
             <label class="flex items-center justify-between p-3 border rounded-xl cursor-pointer hover:border-red-600 transition bg-stone-50 has-[:checked]:bg-red-50 has-[:checked]:border-red-600">
               <div class="flex items-center gap-3">
@@ -170,17 +197,22 @@ const PosApp = {
       }
     }
 
-    // Render Modifiers
     const modContainer = document.getElementById('modal-modifiers-list');
-    if (modContainer && window.POS_MODIFIERS) {
+    const productModifiers = (window.POS_MODIFIERS || []).filter(
+      modifier => Number(modifier.product_category_id) === Number(product.category_id)
+    );
+    const modifierSection = document.getElementById('modal-modifiers-section');
+    if (modContainer) {
       modContainer.innerHTML = '';
-      window.POS_MODIFIERS.forEach(mod => {
+      if (modifierSection) modifierSection.classList.toggle('hidden', productModifiers.length === 0);
+      productModifiers.forEach(mod => {
         const priceText = parseFloat(mod.price) > 0 ? `+${this.state.currencySymbol} ${parseFloat(mod.price).toFixed(2)}` : 'Free';
+        const modifierName = this.escapeHtml(mod.name);
         modContainer.innerHTML += `
           <label class="flex items-center justify-between p-2.5 border rounded-xl cursor-pointer hover:border-red-600 transition bg-white text-xs has-[:checked]:bg-red-50 has-[:checked]:border-red-600">
             <div class="flex items-center gap-2">
-              <input type="checkbox" name="modal_modifier" value="${mod.id}" data-name="${mod.name}" data-price="${mod.price}" class="w-4 h-4 text-red-600 rounded focus:ring-red-600">
-              <span class="font-medium text-stone-800">${mod.name}</span>
+              <input type="checkbox" name="modal_modifier" value="${Number(mod.id)}" data-name="${modifierName}" data-price="${Number(mod.price) || 0}" class="w-4 h-4 text-red-600 rounded focus:ring-red-600">
+              <span class="font-medium text-stone-800">${modifierName}</span>
             </div>
             <span class="font-bold text-red-700">${priceText}</span>
           </label>
@@ -262,6 +294,21 @@ const PosApp = {
     this.renderCart();
   },
 
+  setQuantity(index, value) {
+    const item = this.state.cart[index];
+    if (!item) return;
+
+    const quantity = Number(value);
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      this.renderCart();
+      return;
+    }
+
+    item.quantity = quantity;
+    SoundFX.click();
+    this.renderCart();
+  },
+
   removeItem(index) {
     if (!this.state.cart[index]) return;
     this.state.cart.splice(index, 1);
@@ -285,7 +332,8 @@ const PosApp = {
     this.state.promotionId = '';
     this.state.tableId = null;
     this.state.tableName = 'No Table';
-    this.state.customer = { id: 1, name: 'Walk-in Customer', phone: '0000000000', points: 0 };
+    this.state.customer = null;
+    this.updateCustomerDisplay();
     this.renderCart();
   },
 
@@ -321,123 +369,193 @@ const PosApp = {
 
   selectCustomer(customer) {
     this.state.customer = customer;
-    document.getElementById('pos-customer-name').textContent = customer.name;
-    document.getElementById('pos-customer-points').textContent = `${Number(customer.points || 0).toFixed(2)} pts`;
+    this.updateCustomerDisplay();
     closeModal('customer-search-modal');
     Toast.success(`Customer set: ${customer.name}`);
   },
 
-getCalculations() {
-  let subtotal = 0;
-  let productDiscount = 0;
-  let eligibleSubtotal = 0;
-  const now = Date.now();
-
-  this.state.cart.forEach(item => {
-    let itemUnit = parseFloat(item.unitPrice) || 0;
-
-    if (item.modifiers && item.modifiers.length > 0) {
-      item.modifiers.forEach(m => {
-        itemUnit += parseFloat(m.price || 0);
-      });
+  updateCustomerDisplay() {
+    const name = document.getElementById('pos-customer-name');
+    const points = document.getElementById('pos-customer-points');
+    if (name) name.textContent = this.state.customer ? this.state.customer.name : 'No Customer Selected';
+    if (points) {
+      points.textContent = this.state.customer
+        ? `${Number(this.state.customer.points || this.state.customer.loyalty_points || 0).toFixed(2)} pts`
+        : 'Optional';
     }
+  },
 
-    const lineSubtotal = itemUnit * item.quantity;
-    subtotal += lineSubtotal;
+  async searchCustomers(query) {
+    const results = document.getElementById('cust-search-results');
+    if (!results) return;
 
-    const start = item.discountStart ? new Date(item.discountStart.replace(' ', 'T')).getTime() : null;
-    const end = item.discountEnd ? new Date(item.discountEnd.replace(' ', 'T')).getTime() : null;
-    const active = (!start || now >= start) && (!end || now <= end);
-    if (active && item.discountValue > 0) {
-      const discount = item.discountType === 'fixed'
-        ? item.discountValue * item.quantity
-        : (lineSubtotal * item.discountValue) / 100;
-      productDiscount += Math.min(lineSubtotal, discount);
-    } else {
-      eligibleSubtotal += lineSubtotal;
-    }
-  });
-
-  const afterProductDiscount = Math.max(0, subtotal - productDiscount);
-  let orderDiscount = 0;
-
-  if (this.state.discountType === 'percentage') {
-    orderDiscount = (eligibleSubtotal * (parseFloat(this.state.discountValue) || 0)) / 100;
-  } else {
-    orderDiscount = parseFloat(this.state.discountValue) || 0;
-  }
-
-  orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
-  let ruleDiscount = 0;
-  (window.POS_PROMOTIONS || []).forEach(promotion => {
-    const type = promotion.promotion_type;
-    if (['minimum_spend', 'loyalty', 'first_order'].includes(type)) {
-      const qualifies = type === 'minimum_spend'
-        ? subtotal >= Number(promotion.minimum_spend || 0)
-        : type === 'loyalty'
-          ? this.state.customer && Number(this.state.customer.points || 0) >= Number(promotion.minimum_points || 0)
-          : this.state.customer && this.state.customer.isFirstOrder;
-      if (qualifies) {
-        const value = promotion.discount_type === 'percentage' ? eligibleSubtotal * Number(promotion.discount_value) / 100 : Number(promotion.discount_value);
-        ruleDiscount = Math.max(ruleDiscount, Math.min(eligibleSubtotal, value));
+    const searchSequence = ++this.state.customerSearchSequence;
+    try {
+      const res = await fetch(`api/get_customers.php?q=${encodeURIComponent(query.trim())}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Could not search customers');
       }
+      if (searchSequence !== this.state.customerSearchSequence) return;
+
+      results.replaceChildren();
+      if (!data.customers || data.customers.length === 0) {
+        results.textContent = 'No customers found.';
+        results.className = 'space-y-2 max-h-60 overflow-y-auto text-xs text-stone-400';
+        return;
+      }
+
+      results.className = 'space-y-2 max-h-60 overflow-y-auto';
+      data.customers.forEach(customer => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'w-full flex items-center justify-between p-3 border border-stone-800 rounded-xl hover:border-red-600 hover:bg-stone-800/80 text-left transition';
+        row.addEventListener('click', () => this.selectCustomer({
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          points: customer.loyalty_points,
+          isFirstOrder: Boolean(Number(customer.is_first_order))
+        }));
+
+        const details = document.createElement('span');
+        const name = document.createElement('span');
+        name.className = 'block font-bold text-xs text-white';
+        name.textContent = customer.name;
+        const phone = document.createElement('span');
+        phone.className = 'block text-[11px] text-stone-400';
+        phone.textContent = customer.phone || '';
+        details.append(name, phone);
+
+        const loyaltyPoints = document.createElement('span');
+        loyaltyPoints.className = 'text-xs font-extrabold text-red-400 bg-red-950/70 border border-red-900 px-2 py-0.5 rounded-lg';
+        loyaltyPoints.textContent = `${Number(customer.loyalty_points || 0).toFixed(2)} pts`;
+
+        row.append(details, loyaltyPoints);
+        results.appendChild(row);
+      });
+    } catch (error) {
+      if (searchSequence !== this.state.customerSearchSequence) return;
+      console.error('Customer search error:', error);
+      results.textContent = 'Could not load customers. Please try again.';
+      Toast.error('Could not search customers');
     }
-    if (['bogo', 'buy_x_get_y'].includes(type) && (promotion.product_id || promotion.product_ids)) {
-      const triggerIds = String(promotion.product_ids || promotion.product_id).split(',').map(Number).filter(Boolean);
-      const trigger = this.state.cart.find(item => triggerIds.includes(Number(item.productId)));
-      if (trigger) {
-        const groups = Math.floor(trigger.quantity / (Number(promotion.buy_quantity || 1) + Number(promotion.get_quantity || 1)));
-        let freeQuantity = groups * Number(promotion.get_quantity || 1);
-        const rewardIds = String(promotion.reward_product_ids || promotion.reward_product_id || trigger.productId).split(',').map(Number).filter(Boolean);
-        rewardIds.forEach(rewardId => {
-          const reward = this.state.cart.find(item => Number(item.productId) === rewardId);
-          if (reward && freeQuantity > 0) {
-            const freeCount = Math.min(reward.quantity, freeQuantity);
-            ruleDiscount += freeCount * (Number(reward.unitPrice) || 0);
-            freeQuantity -= freeCount;
-          }
+  },
+
+  getCalculations() {
+    let subtotal = 0;
+    let productDiscount = 0;
+    let eligibleSubtotal = 0;
+    const now = Date.now();
+
+    this.state.cart.forEach(item => {
+      let itemUnit = parseFloat(item.unitPrice) || 0;
+
+      if (item.modifiers && item.modifiers.length > 0) {
+        item.modifiers.forEach(m => {
+          itemUnit += parseFloat(m.price || 0);
         });
       }
+
+      const lineSubtotal = itemUnit * item.quantity;
+      subtotal += lineSubtotal;
+
+      const start = item.discountStart ? new Date(item.discountStart.replace(' ', 'T')).getTime() : null;
+      const end = item.discountEnd ? new Date(item.discountEnd.replace(' ', 'T')).getTime() : null;
+      const active = (!start || now >= start) && (!end || now <= end);
+      if (active && item.discountValue > 0) {
+        const discount = item.discountType === 'fixed'
+          ? item.discountValue * item.quantity
+          : (lineSubtotal * item.discountValue) / 100;
+        productDiscount += Math.min(lineSubtotal, discount);
+      } else {
+        eligibleSubtotal += lineSubtotal;
+      }
+    });
+
+    const afterProductDiscount = Math.max(0, subtotal - productDiscount);
+    let orderDiscount = 0;
+
+    if (this.state.discountType === 'percentage') {
+      orderDiscount = (eligibleSubtotal * (parseFloat(this.state.discountValue) || 0)) / 100;
+    } else {
+      orderDiscount = parseFloat(this.state.discountValue) || 0;
     }
-    if (type === 'combo' && promotion.combo_product_ids) {
-      const ids = String(promotion.combo_product_ids).split(',').map(Number).filter(Boolean);
-      if (ids.length && ids.every(id => this.state.cart.some(item => Number(item.productId) === id))) {
-        const comboGross = ids.reduce((sum, id) => {
-          const item = this.state.cart.find(line => Number(line.productId) === id);
-          return sum + (Number(item.unitPrice) || 0);
-        }, 0);
-        ruleDiscount += Math.max(0, comboGross - Number(promotion.discount_value || 0));
+
+    orderDiscount = Math.min(eligibleSubtotal, orderDiscount);
+    let ruleDiscount = 0;
+
+    (window.POS_PROMOTIONS || []).forEach(promotion => {
+      const type = promotion.promotion_type;
+      if (['minimum_spend', 'loyalty', 'first_order'].includes(type)) {
+        const qualifies = type === 'minimum_spend'
+          ? subtotal >= Number(promotion.minimum_spend || 0)
+          : type === 'loyalty'
+            ? this.state.customer && Number(this.state.customer.points || 0) >= Number(promotion.minimum_points || 0)
+            : this.state.customer && this.state.customer.isFirstOrder;
+        if (qualifies) {
+          const value = promotion.discount_type === 'percentage' ? eligibleSubtotal * Number(promotion.discount_value) / 100 : Number(promotion.discount_value);
+          ruleDiscount = Math.max(ruleDiscount, Math.min(eligibleSubtotal, value));
+        }
+      }
+      if (['bogo', 'buy_x_get_y'].includes(type) && (promotion.product_id || promotion.product_ids)) {
+        const triggerIds = String(promotion.product_ids || promotion.product_id).split(',').map(Number).filter(Boolean);
+        const trigger = this.state.cart.find(item => triggerIds.includes(Number(item.productId)));
+        if (trigger) {
+          const groups = Math.floor(trigger.quantity / (Number(promotion.buy_quantity || 1) + Number(promotion.get_quantity || 1)));
+          let freeQuantity = groups * Number(promotion.get_quantity || 1);
+          const rewardIds = String(promotion.reward_product_ids || promotion.reward_product_id || trigger.productId).split(',').map(Number).filter(Boolean);
+          rewardIds.forEach(rewardId => {
+            const reward = this.state.cart.find(item => Number(item.productId) === rewardId);
+            if (reward && freeQuantity > 0) {
+              const freeCount = Math.min(reward.quantity, freeQuantity);
+              ruleDiscount += freeCount * (Number(reward.unitPrice) || 0);
+              freeQuantity -= freeCount;
+            }
+          });
+        }
+      }
+      if (type === 'combo' && promotion.combo_product_ids) {
+        const ids = String(promotion.combo_product_ids).split(',').map(Number).filter(Boolean);
+        if (ids.length && ids.every(id => this.state.cart.some(item => Number(item.productId) === id))) {
+          const comboGross = ids.reduce((sum, id) => {
+            const item = this.state.cart.find(line => Number(line.productId) === id);
+            return sum + (Number(item.unitPrice) || 0);
+          }, 0);
+          ruleDiscount += Math.max(0, comboGross - Number(promotion.discount_value || 0));
+        }
+      }
+    });
+
+    const selectedPromotion = (window.POS_ORDER_PROMOTIONS || []).find(promotion => String(promotion.id) === String(this.state.promotionId));
+    if (selectedPromotion) {
+      const qualifies = selectedPromotion.promotion_type !== 'minimum_spend' || subtotal >= Number(selectedPromotion.minimum_spend || 0);
+      if (qualifies) {
+        const selectedDiscount = selectedPromotion.discount_type === 'percentage'
+          ? eligibleSubtotal * Number(selectedPromotion.discount_value || 0) / 100
+          : Number(selectedPromotion.discount_value || 0);
+        orderDiscount = Math.min(eligibleSubtotal, Math.max(0, selectedDiscount));
       }
     }
-  });
-  const selectedPromotion = (window.POS_ORDER_PROMOTIONS || []).find(promotion => String(promotion.id) === String(this.state.promotionId));
-  if (selectedPromotion) {
-    const qualifies = selectedPromotion.promotion_type !== 'minimum_spend' || subtotal >= Number(selectedPromotion.minimum_spend || 0);
-    if (qualifies) {
-      const selectedDiscount = selectedPromotion.discount_type === 'percentage'
-        ? eligibleSubtotal * Number(selectedPromotion.discount_value || 0) / 100
-        : Number(selectedPromotion.discount_value || 0);
-      orderDiscount = Math.min(eligibleSubtotal, Math.max(0, selectedDiscount));
-    }
-  }
-  orderDiscount = Math.max(orderDiscount, Math.min(eligibleSubtotal, ruleDiscount));
-  const discount = productDiscount + orderDiscount;
 
-  const netSubtotal = Math.max(0, afterProductDiscount - orderDiscount);
-  const taxAmount = netSubtotal * (this.state.taxRate || 0) / 100;
-  const serviceCharge = netSubtotal * (this.state.serviceChargeRate || 0) / 100;
-  const grandTotal = netSubtotal + taxAmount + serviceCharge;
+    orderDiscount = Math.max(orderDiscount, Math.min(eligibleSubtotal, ruleDiscount));
+    const discount = productDiscount + orderDiscount;
 
-  return {
-    subtotal,
-    productDiscount,
-    orderDiscount,
-    discount,
-    taxAmount,
-    serviceCharge,
-    grandTotal
-  };
-},
+    const netSubtotal = Math.max(0, afterProductDiscount - orderDiscount);
+    const taxAmount = netSubtotal * (this.state.taxRate || 0) / 100;
+    const serviceCharge = netSubtotal * (this.state.serviceChargeRate || 0) / 100;
+    const grandTotal = netSubtotal + taxAmount + serviceCharge;
+
+    return {
+      subtotal,
+      productDiscount,
+      orderDiscount,
+      discount,
+      taxAmount,
+      serviceCharge,
+      grandTotal
+    };
+  },
 
   renderCart() {
     const cartContainer = document.getElementById('pos-cart-items');
@@ -464,8 +582,9 @@ getCalculations() {
         let modsBadges = '';
         if (item.modifiers && item.modifiers.length > 0) {
           modsBadges = item.modifiers.map(m => {
-            modTotal += parseFloat(m.price || 0);
-            return `<span class="inline-block bg-red-100 text-red-900 text-[10px] px-1.5 py-0.5 rounded font-medium mr-1 mb-1">+ ${m.name}</span>`;
+            const modifierPrice = parseFloat(m.price || 0);
+            modTotal += modifierPrice;
+            return `<span class="inline-block bg-red-100 text-red-900 text-[10px] px-1.5 py-0.5 rounded font-medium mr-1 mb-1">+ ${this.escapeHtml(m.name)} ${this.formatPrice(modifierPrice)}</span>`;
           }).join('');
         }
 
@@ -477,25 +596,30 @@ getCalculations() {
           ? Math.min(itemSubtotal, item.discountType === 'fixed' ? item.discountValue * item.quantity : itemSubtotal * item.discountValue / 100)
           : 0;
         const itemTotal = itemSubtotal - itemDiscount;
-        const variantHtml = item.variantName ? `<span class="text-xs text-stone-500 font-normal">(${item.variantName})</span>` : '';
+        const variantHtml = item.variantName
+          ? `<span class="text-xs text-stone-500 font-normal">${this.escapeHtml(item.variantName)} · ${this.formatPrice(item.unitPrice)}</span>`
+          : '';
+        const basePriceHtml = !item.variantName
+          ? `<p class="text-xs font-bold text-red-600 mt-0.5">${this.formatPrice(item.unitPrice)}</p>`
+          : '';
         const notesHtml = item.notes ? `<p class="text-[11px] text-red-600 italic mt-0.5"><i class="fa-regular fa-note-sticky mr-1"></i>${item.notes}</p>` : '';
 
         cartContainer.innerHTML += `
-          <div class="flex items-start justify-between p-3 border-b border-stone-100 hover:bg-stone-50 transition group">
+          <div class="flex items-start justify-between p-3 border border-stone-200 rounded-xl bg-white hover:bg-stone-50 transition group">
             <div class="flex-1 pr-2">
               <h4 class="font-semibold text-stone-800 text-sm leading-tight">${item.name} ${variantHtml}</h4>
-              <p class="text-xs font-bold text-red-600 mt-0.5">${this.state.currencySymbol} ${item.unitPrice.toFixed(2)}</p>
+              ${basePriceHtml}
               ${modsBadges ? `<div class="mt-1.5 flex flex-wrap">${modsBadges}</div>` : ''}
               ${notesHtml}
             </div>
-
             <div class="flex flex-col items-end gap-1.5">
-              <span class="font-bold text-stone-900 text-sm">${this.state.currencySymbol} ${itemTotal.toFixed(2)}</span>
+              <span class="text-[10px] font-semibold text-stone-500">Line total</span>
+              <span class="font-bold text-stone-900 text-sm">${this.formatPrice(itemTotal)}</span>
               <div class="flex items-center border border-stone-300 rounded-lg overflow-hidden bg-white shadow-xs">
                 <button onclick="PosApp.updateQuantity(${index}, -1)" class="w-6 h-6 flex items-center justify-center text-stone-600 hover:bg-stone-100 active:bg-stone-200">
                   <i class="fa-solid fa-minus text-[10px]"></i>
                 </button>
-                <span class="w-6 text-center text-xs font-bold text-stone-800">${item.quantity}</span>
+                <input type="number" min="1" step="1" inputmode="numeric" aria-label="Quantity for ${this.escapeHtml(item.name)}" onchange="PosApp.setQuantity(${index}, this.value)" value="${item.quantity}" class="w-12 h-7 text-center text-xs font-bold text-stone-800 border-x border-stone-200 focus:outline-none focus:ring-2 focus:ring-red-500">
                 <button onclick="PosApp.updateQuantity(${index}, 1)" class="w-6 h-6 flex items-center justify-center text-stone-600 hover:bg-stone-100 active:bg-stone-200">
                   <i class="fa-solid fa-plus text-[10px]"></i>
                 </button>
@@ -506,20 +630,17 @@ getCalculations() {
       });
     }
 
-    // Update Summary Box
     document.getElementById('pos-subtotal').textContent = `${this.state.currencySymbol} ${calc.subtotal.toFixed(2)}`;
     document.getElementById('pos-promotion-discount').textContent = `-${this.state.currencySymbol} ${calc.productDiscount.toFixed(2)}`;
     document.getElementById('pos-normal-discount').textContent = `-${this.state.currencySymbol} ${calc.orderDiscount.toFixed(2)}`;
     const totalDiscountElement = document.getElementById('pos-total-discount');
     if (totalDiscountElement) totalDiscountElement.textContent = `-${this.state.currencySymbol} ${calc.discount.toFixed(2)}`;
     document.getElementById('pos-grand-total').textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
-    
-    // Bottom Pay Button
+
     const payBtnTotal = document.getElementById('pos-pay-btn-amount');
     if (payBtnTotal) payBtnTotal.textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
   },
 
-  // Checkout & Payment
   openCheckoutModal() {
     if (this.state.cart.length === 0) {
       Toast.warning('Cart is empty. Please add items to checkout.');
@@ -529,10 +650,10 @@ getCalculations() {
     const calc = this.getCalculations();
     document.getElementById('pay-modal-total').textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
     document.getElementById('pay-cash-tendered').value = calc.grandTotal.toFixed(2);
-    
+
     this.calculateChange();
     this.renderPresetCashButtons(calc.grandTotal);
-    
+
     openModal('pos-checkout-modal');
   },
 
@@ -540,12 +661,11 @@ getCalculations() {
     const presetsContainer = document.getElementById('pay-preset-buttons');
     if (!presetsContainer) return;
 
-    // Sri Lanka Rupee standard notes: 500, 1000, 2000, 5000
     const rounded500 = Math.ceil(total / 500) * 500;
     const rounded1000 = Math.ceil(total / 1000) * 1000;
     const rounded2000 = Math.ceil(total / 2000) * 2000;
     const rounded5000 = Math.ceil(total / 5000) * 5000;
-    
+
     const amounts = Array.from(new Set([total, rounded500, rounded1000, rounded2000, rounded5000, 5000])).filter(a => a >= total).slice(0, 4);
 
     presetsContainer.innerHTML = '';
@@ -567,9 +687,9 @@ getCalculations() {
     const calc = this.getCalculations();
     const tendered = parseFloat(document.getElementById('pay-cash-tendered').value) || 0;
     const change = Math.max(0, tendered - calc.grandTotal);
-    
+
     document.getElementById('pay-change-amount').textContent = `${this.state.currencySymbol} ${change.toFixed(2)}`;
-    
+
     const changeBox = document.getElementById('pay-change-box');
     if (tendered < calc.grandTotal) {
       changeBox.classList.add('bg-rose-50', 'border-rose-200');
@@ -585,10 +705,9 @@ getCalculations() {
     }
   },
 
-  // Submit Order to Backend
   async submitOrder(paymentMethod = 'cash') {
     if (this.state.cart.length === 0) return;
-    
+
     const calc = this.getCalculations();
     const tendered = parseFloat(document.getElementById('pay-cash-tendered').value) || calc.grandTotal;
 
@@ -683,43 +802,68 @@ getCalculations() {
     openModal('receipt-success-modal');
   },
 
+  // ===================== PRINTING (QZ) =====================
   printReceiptDirect(orderId) {
     if (window.qz && window.QZ_PRINT_SETTINGS) {
       this.printReceiptsToConfiguredPrinters(orderId).catch((error) => {
-        console.error('Direct printer error:', error);
-        Toast.error('Direct printing unavailable. Opening print dialogs instead.');
+        console.error('QZ Direct Print Error:', error);
+        Toast.error('QZ printing failed. Opening browser print instead.');
         this.openReceiptPrintDialogs(orderId);
       });
       return;
     }
 
+    console.warn('QZ not available');
+    Toast.warning('QZ Tray not detected. Using browser print.');
     this.openReceiptPrintDialogs(orderId);
   },
 
   openReceiptPrintDialogs(orderId) {
-    const printWindow = window.open(`print_receipt.php?id=${orderId}&copy=main&print_next=1&auto_print=1`, '_blank', 'width=400,height=600');
+    const printWindow = window.open(
+      `print_receipt.php?id=${orderId}&copy=main&print_next=1&auto_print=1`,
+      '_blank',
+      'width=400,height=600'
+    );
     if (printWindow) printWindow.focus();
   },
 
   async printReceiptsToConfiguredPrinters(orderId) {
-    if (!qz.websocket.isActive()) {
-      await qz.websocket.connect();
+    try {
+      if (!qz.websocket.isActive()) {
+        console.log('Connecting to QZ Tray...');
+        await qz.websocket.connect();
+      }
+
+      const printCopy = async (configuredCopy, printerName) => {
+        const printerLabel = String(printerName || '').toLowerCase();
+        const copy = printerLabel.includes('kitchen')
+          ? 'kitchen'
+          : printerLabel.includes('cashier')
+            ? 'main'
+            : configuredCopy;
+        console.log(`Printing ${copy} → ${printerName}`);
+        const receiptHtml = await this.loadReceiptDocument(orderId, copy);
+
+        const printerConfig = qz.configs.create(printerName);
+
+        await qz.print(printerConfig, [{
+          type: 'html',
+          format: 'plain',
+          data: receiptHtml
+        }]);
+
+        console.log(`${copy} printed successfully`);
+      };
+
+      await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
+      await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
+
+      await qz.websocket.disconnect();
+      Toast.success('Main bill and kitchen copy sent to printers.');
+    } catch (err) {
+      console.error('printReceiptsToConfiguredPrinters error:', err);
+      throw err;
     }
-
-    const printCopy = async (copy, printerName) => {
-      const receiptHtml = await this.loadReceiptDocument(orderId, copy);
-      const printerConfig = qz.configs.create(printerName);
-      await qz.print(printerConfig, [{
-        type: 'html',
-        format: 'plain',
-        data: receiptHtml
-      }]);
-    };
-
-    await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
-    await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
-    await qz.websocket.disconnect();
-    Toast.success('Main bill and kitchen copy sent to their printers.');
   },
 
   loadReceiptDocument(orderId, copy) {
@@ -727,6 +871,7 @@ getCalculations() {
       const frame = document.createElement('iframe');
       frame.hidden = true;
       frame.src = `print_receipt.php?id=${encodeURIComponent(orderId)}&copy=${copy}&embed=1`;
+
       frame.onload = () => {
         try {
           resolve(frame.contentDocument.documentElement.outerHTML);
@@ -736,14 +881,17 @@ getCalculations() {
           frame.remove();
         }
       };
+
       frame.onerror = () => {
         frame.remove();
         reject(new Error(`Could not load ${copy} receipt`));
       };
+
       document.body.appendChild(frame);
     });
   },
 
+  // ===================== HOLD ORDERS =====================
   async holdCurrentOrder() {
     if (this.state.cart.length === 0) {
       Toast.warning('Cannot hold an empty cart');
@@ -781,9 +929,12 @@ getCalculations() {
       if (data.success) {
         Toast.success('Order held successfully');
         this.clearCart();
+      } else {
+        throw new Error(data.message || 'Failed to hold order');
       }
-    } catch (e) {
-      Toast.error('Failed to hold order');
+    } catch (error) {
+      console.error('Hold order error:', error);
+      Toast.error(error.message || 'Failed to hold order');
     }
   },
 
@@ -832,13 +983,20 @@ getCalculations() {
         this.state.cart = JSON.parse(data.order.cart_json);
         this.state.orderType = data.order.order_type || 'dine_in';
         this.state.tableId = data.order.table_id;
+        this.state.customer = data.customer
+          ? { ...data.customer, isFirstOrder: Boolean(Number(data.customer.is_first_order)) }
+          : null;
+        this.updateCustomerDisplay();
         this.setOrderType(this.state.orderType);
         this.renderCart();
         closeModal('held-orders-modal');
         Toast.success('Held order loaded');
+      } else {
+        throw new Error(data.message || 'Failed to recall order');
       }
-    } catch (e) {
-      Toast.error('Failed to recall order');
+    } catch (error) {
+      console.error('Recall held order error:', error);
+      Toast.error(error.message || 'Failed to recall order');
     }
   },
 

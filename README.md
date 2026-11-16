@@ -15,7 +15,7 @@ A high-performance, modern, and beautiful Point of Sale (POS) and cafe managemen
 2. **Interactive Cafe POS Terminal (`pos.php`)**:
    - Touch and keyboard-friendly layout with instant category ribbons.
    - Real-time product search with barcode & SKU matching.
-   - **Item Customization Modal**: Choose drink size (Small, Regular, Large), plant milks (Oat, Almond, Soy, Coconut), artisan syrups (Vanilla, Caramel, Hazelnut), extra espresso shots, and sweetness/ice levels.
+   - **Item Customization Modal**: Choose drink sizes and optional add-ons scoped to the product category, with modifier type, option/flavour, and price.
    - **Dine-In, Takeaway & Delivery** order modes with visual table assignment.
    - Quick cash payment calculator with preset denomination buttons ($10, $20, $50, $100, Exact) and live return change calculator.
    - Split payments, Card/POS terminal, and UPI/QR code payment modes.
@@ -76,12 +76,14 @@ define('DB_PASS', '');
 Move or symlink the `cafe-pos` folder into your `htdocs` or `www` directory, then navigate to:
 `http://localhost/cafe-pos/`
 
+Clean page URLs (without `.php`) use Apache `mod_rewrite`; ensure it is enabled and `.htaccess` overrides are allowed. The PHP built-in server uses `router.php` as shown below; Nginx needs equivalent rewrite configuration.
+
 #### Option B: Using PHP Built-in Server
-Open your terminal in the `cafe-pos` directory and run:
+Open your terminal in the `cafe-pos` directory and run the router-enabled server:
 ```bash
-php -S localhost:8000
+php -S localhost:8080 router.php
 ```
-Then visit: `http://localhost:8000` in your web browser.
+Then visit: `http://localhost:8080` in your web browser. Restart an existing server with this command to enable clean page URLs.
 
 ---
 

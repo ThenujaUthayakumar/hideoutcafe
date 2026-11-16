@@ -6,7 +6,6 @@
 if (!isset($settings)) {
     $settings = getSettings();
 }
-$currency = $settings['currency_symbol'] ?? 'Rs.';
 ?>
 <div class="receipt-container" id="thermal-receipt-area-kitchen">
     <!-- Header / Brand -->
@@ -37,7 +36,7 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
     <div class="receipt-divider"></div>
 
     <!-- Items Table -->
-    <table class="w-full text-xs text-left my-1">
+    <table class="w-full text-sm text-left my-1">
         <thead>
             <tr class="border-b border-stone-800 pb-1">
                 <th class="py-0.5 font-normal">DESCRIPTION</th>
@@ -48,10 +47,28 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
             <?php foreach ($order['items'] as $item): ?>
             <tr>
                 <td class="py-1 align-top">
-                    <div class="font-bold leading-tight"><?php echo e($item['product_name']); ?></div>
-                    <?php if (!empty($item['variant_name'])): ?>
-                        <div class="text-[11px] text-stone-500"><?php echo e($item['variant_name']); ?></div>
-                    <?php endif; ?>
+                    <div class="leading-tight">
+                        <?php echo e($item['product_name']); ?>
+                        <?php
+                        $details = [];
+
+                        if (!empty($item['variant_name'])) {
+                            $details[] = $item['variant_name'];
+                        }
+
+                        $modifiers = !empty($item['modifiers_json']) ? json_decode($item['modifiers_json'], true) : [];
+
+                        foreach (is_array($modifiers) ? $modifiers : [] as $modifier) {
+                            if (!empty($modifier['name'])) {
+                                $details[] = $modifier['name'];
+                            }
+                        }
+
+                        if (!empty($details)) {
+                            echo '<span class="text-[11px] text-stone-600">(' . e(implode(' + ', $details)) . ')</span>';
+                        }
+                        ?>
+                    </div>
                 </td>
                 <td class="py-1 text-center align-top"><?php echo (int)$item['quantity']; ?></td>
             </tr>

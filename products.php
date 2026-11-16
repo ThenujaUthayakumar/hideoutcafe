@@ -99,7 +99,7 @@ if (!empty($search)) {
     $params[':product_name'] = "%$search%";
     $params[':product_code'] = "%$search%";
 }
-$sql .= " ORDER BY c.sort_order ASC, p.name ASC";
+$sql .= " ORDER BY c.sort_order ASC, p.id ASC";
 $countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($sql) filtered_products", $params);
 $totalProducts = (int)($countRow['total'] ?? 0);
 $totalPages = max(1, (int)ceil($totalProducts / $perPage));
@@ -383,7 +383,7 @@ function openProductModal() {
   document.getElementById('product-modal-title').textContent = 'Add New Menu Item';
   document.getElementById('prod_form_id').value = '';
   document.getElementById('prod_form_name').value = '';
-    codeInput.value = 'COF-' + Math.floor(Math.random() * 9000 + 1000);
+    codeInput.value = 'HOC-' + Math.floor(Math.random() * 9000 + 1000);
     codeValueInput.value = codeInput.value;
   document.getElementById('prod_form_price').value = '';
   document.getElementById('prod_form_cost').value = '0.00';

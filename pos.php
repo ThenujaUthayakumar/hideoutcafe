@@ -11,6 +11,7 @@ $currency = $settings['currency_symbol'] ?? 'Rs.';
 $user = currentUser();
 ensureProductDiscountSchema();
 ensureCustomerDobSchema();
+ensureModifierCategorySchema();
 ensurePromotionsSchema();
 $activePromotions = getActivePromotions();
 ensurePromotionsSchema();
@@ -43,7 +44,12 @@ foreach ($products as &$p) {
 }
 
 // Fetch Modifiers, Tables, Customers
-$modifiers = db()->fetchAll("SELECT * FROM modifiers WHERE status = 'active' ORDER BY category ASC, name ASC");
+$modifiers = db()->fetchAll(
+    "SELECT id, product_category_id, name, category, price
+     FROM modifiers
+     WHERE status = 'active' AND product_category_id IS NOT NULL
+     ORDER BY category ASC, name ASC"
+);
 $tables = db()->fetchAll("SELECT * FROM tables ORDER BY table_number ASC");
 $customers = db()->fetchAll("SELECT c.id, c.name, c.phone, c.loyalty_points, NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid') AS is_first_order FROM customers c ORDER BY c.id ASC LIMIT 50");
 
@@ -61,7 +67,7 @@ if ($preselectedTableId) {
 require_once __DIR__ . '/includes/header.php';
 ?>
 <script>
-  window.POS_MODIFIERS = <?= json_encode($modifiers) ?>;
+  window.POS_MODIFIERS = <?= json_encode($modifiers, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     window.POS_PROMOTIONS = [];
     window.POS_ORDER_PROMOTIONS = <?= json_encode($activePromotions) ?>;
   window.POS_SETTINGS = {
@@ -79,7 +85,7 @@ require_once __DIR__ . '/includes/header.php';
                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-stone-500 pointer-events-none">
                         <i class="fa-solid fa-magnifying-glass"></i>
                     </span>
-                    <input type="text" id="pos-search-input" oninput="PosApp.onSearch(this.value)" placeholder="Search coffee, bakery, or SKU... (Press F1)" class="w-full pl-10 pr-10 py-2.5 bg-stone-900 border border-stone-800 rounded-xl text-sm font-medium text-white focus:bg-black focus:ring-2 focus:ring-red-600 focus:border-red-600 focus:outline-none transition placeholder-stone-500">
+                    <input type="text" id="pos-search-input" oninput="PosApp.onSearch(this.value)" placeholder="Search... (Press F1)" class="w-full pl-10 pr-10 py-2.5 bg-stone-900 border border-stone-800 rounded-xl text-sm font-medium text-white focus:bg-black focus:ring-2 focus:ring-red-600 focus:border-red-600 focus:outline-none transition placeholder-stone-500">
                     <span class="absolute inset-y-0 right-0 pr-3 flex items-center text-[10px] font-bold text-stone-500 pointer-events-none">F1</span>
                 </div>
                 <button onclick="PosApp.openHeldOrdersModal()" class="px-3.5 py-2.5 bg-stone-900 hover:bg-stone-800 text-stone-300 font-bold rounded-xl text-xs flex items-center gap-2 border border-stone-800 transition">
@@ -101,6 +107,13 @@ require_once __DIR__ . '/includes/header.php';
         <div class="flex-1 overflow-y-auto p-4 sm:p-5">
             <div id="pos-products-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4">
                 <?php foreach ($products as $prod): ?>
+                    <?php
+                    $displayPrice = (float)$prod['price'];
+                    $showStartingPrice = $displayPrice <= 0 && !empty($prod['variants']);
+                    if ($showStartingPrice) {
+                        $displayPrice = (float)$prod['variants'][0]['extra_price'];
+                    }
+                    ?>
                     <script type="application/json" id="product-raw-<?= $prod['id'] ?>"><?= json_encode($prod) ?></script>
                     <div onclick="PosApp.selectProduct(<?= $prod['id'] ?>)" data-category="<?= $prod['category_id'] ?>" data-name="<?= e($prod['name']) ?>" data-code="<?= e($prod['code']) ?>" class="pos-product-card bg-stone-900 border border-stone-800 rounded-2xl p-3 flex flex-col justify-between cursor-pointer hover:border-red-600 shadow-md group">
                         <div>
@@ -117,7 +130,7 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
                         <div class="mt-3 pt-2.5 border-t border-stone-800 flex items-center justify-between">
                             <div>
-                                <span class="text-sm sm:text-base font-black text-red-400"><?= $currency ?> <?= number_format($prod['price'], 2) ?></span>
+                                <span class="text-sm sm:text-base font-black text-red-400"><?= $showStartingPrice ? 'From ' : '' ?><?= $currency ?> <?= number_format($displayPrice, 2) ?></span>
                                 <?php if (getActiveProductDiscount($prod) > 0): ?><span class="block text-[10px] font-bold text-emerald-400">Discount active</span><?php endif; ?>
                                 <?php if (!empty($prod['variants'])): ?>
                                     <span class="block text-[10px] text-stone-500 font-semibold">+ Sizes</span>
@@ -167,7 +180,7 @@ require_once __DIR__ . '/includes/header.php';
                 </button>
             </div>
         </div>
-        <div id="pos-cart-items" class="flex-1 overflow-y-auto divide-y divide-stone-900 p-2"></div>
+        <div id="pos-cart-items" class="flex-1 overflow-y-auto space-y-2 p-2"></div>
         <div class="p-4 bg-stone-900/80 border-t border-stone-800 space-y-3">
             <div class="flex items-center justify-between text-xs">
                 <button onclick="openModal('discount-modal')" class="text-stone-300 hover:text-red-400 font-bold flex items-center gap-1.5">
@@ -229,8 +242,8 @@ require_once __DIR__ . '/includes/header.php';
                 <h4 class="text-xs font-extrabold uppercase text-stone-400 tracking-wider mb-2">Select Size / Variant</h4>
                 <div id="modal-variants-list" class="grid grid-cols-2 gap-2"></div>
             </div>
-            <div>
-                <h4 class="text-xs font-extrabold uppercase text-stone-400 tracking-wider mb-2">Milks, Syrups & Add-ons</h4>
+            <div id="modal-modifiers-section" class="hidden">
+                <h4 class="text-xs font-extrabold uppercase text-stone-400 tracking-wider mb-2">Optional Add-ons</h4>
                 <div id="modal-modifiers-list" class="grid grid-cols-2 gap-2"></div>
             </div>
             <div>
@@ -294,7 +307,7 @@ require_once __DIR__ . '/includes/header.php';
                 <button onclick="switchCustomerTab('new')" id="cust-tab-new-btn" class="flex-1 py-2 text-xs font-bold rounded-lg text-stone-400 hover:text-white">+ New Customer</button>
             </div>
             <div id="cust-section-search" class="space-y-3">
-                <input type="text" id="cust-search-input" oninput="searchCustomers(this.value)" placeholder="Search by name or phone..." class="w-full px-3.5 py-2.5 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white focus:bg-black focus:ring-2 focus:ring-red-600">
+                <input type="text" id="cust-search-input" oninput="PosApp.searchCustomers(this.value)" placeholder="Search by name or phone..." class="w-full px-3.5 py-2.5 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white focus:bg-black focus:ring-2 focus:ring-red-600">
                 <div id="cust-search-results" class="space-y-2 max-h-60 overflow-y-auto">
                     <?php foreach ($customers as $c): ?>
                     <div onclick="PosApp.selectCustomer({ id: <?= $c['id'] ?>, name: '<?= addslashes($c['name']) ?>', phone: '<?= e($c['phone']) ?>', points: <?= (float)$c['loyalty_points'] ?>, isFirstOrder: <?= $c['is_first_order'] ? 'true' : 'false' ?> })" class="flex items-center justify-between p-3 border border-stone-800 rounded-xl hover:border-red-600 hover:bg-stone-800/80 cursor-pointer transition">
@@ -460,7 +473,7 @@ require_once __DIR__ . '/includes/header.php';
         kitchenPrinter: 'XP-80C (copy 2)'
     };
 </script>
-<script src="<?= BASE_URL ?>/assets/js/pos.js"></script>
+<script src="<?= BASE_URL ?>/assets/js/pos.js?v=<?= filemtime(__DIR__ . '/assets/js/pos.js') ?>"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     PosApp.init(window.POS_SETTINGS);

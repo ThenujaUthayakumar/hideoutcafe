@@ -9,6 +9,11 @@ $orderId = !empty($_GET['id']) ? (int)$_GET['id'] : 0;
 $currentUser = currentUser();
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+$statusFilter = $_GET['status'] ?? 'all';
+if (!in_array($statusFilter, ['all', 'pending', 'completed', 'cancelled'], true)) {
+    $statusFilter = 'all';
+}
+$ordersUrl = BASE_URL . '/orders.php' . ($statusFilter !== 'all' ? '?status=' . rawurlencode($statusFilter) : '');
 ensureOrderDiscountSchema();
 $orderOwnerFilter = '';
 $orderParams = [':id' => $orderId];
@@ -53,7 +58,7 @@ $items = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id", [':id'
 
     <!-- Action Toolbar -->
     <div class="max-w-3xl w-full flex items-center justify-between mb-4 no-print">
-        <a href="<?= BASE_URL ?>/orders.php" class="px-4 py-2 bg-stone-800 text-stone-300 font-bold rounded-xl text-xs hover:bg-stone-700 transition">
+        <a href="<?= e($ordersUrl) ?>" class="px-4 py-2 bg-stone-800 text-stone-300 font-bold rounded-xl text-xs hover:bg-stone-700 transition">
             &larr; Back to Orders
         </a>
         <div class="flex gap-2">
@@ -137,7 +142,7 @@ $items = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id", [':id'
                                 if (!empty($mods)) {
                                     echo '<div class="text-[11px] text-red-700 font-medium mt-0.5">';
                                     foreach ($mods as $m) {
-                                        echo '<span class="mr-2">+ ' . e($m['name']) . ' (' . $currency . ' ' . number_format($m['price'], 2) . ')</span>';
+                                        echo '<span class="mr-2">+ ' . e($m['name']) . ' ' . number_format($m['price'], 2) . '</span>';
                                     }
                                     echo '</div>';
                                 }
