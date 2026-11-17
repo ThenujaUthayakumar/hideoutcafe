@@ -8,6 +8,19 @@ requireAuth();
 $title = 'POS Terminal';
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
+$qzConfigPath = __DIR__ . '/config/qz-tray.php';
+$qzConfig = is_file($qzConfigPath) ? require $qzConfigPath : [];
+$qzConfig = is_array($qzConfig) ? $qzConfig : [];
+$qzCertificatePath = $qzConfig['certificate_path'] ?? '';
+$qzPrivateKeyPath = $qzConfig['private_key_path'] ?? '';
+$qzCertificate = $qzCertificatePath && is_readable($qzCertificatePath)
+    ? file_get_contents($qzCertificatePath)
+    : '';
+$qzSigningReady = is_string($qzCertificate)
+    && $qzCertificate !== ''
+    && $qzPrivateKeyPath
+    && is_readable($qzPrivateKeyPath)
+    && function_exists('openssl_sign');
 $user = currentUser();
 ensureProductDiscountSchema();
 ensureCustomerDobSchema();
@@ -70,6 +83,13 @@ require_once __DIR__ . '/includes/header.php';
   window.POS_MODIFIERS = <?= json_encode($modifiers, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
     window.POS_PROMOTIONS = [];
     window.POS_ORDER_PROMOTIONS = <?= json_encode($activePromotions) ?>;
+  window.QZ_PRINT_SETTINGS = {
+        mainPrinter: <?= json_encode($qzConfig['cashier_printer'] ?? 'Cashier', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+        kitchenPrinter: <?= json_encode($qzConfig['kitchen_printer'] ?? 'Kitchen', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+        certificate: <?= json_encode($qzCertificate ?: '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>,
+        csrfToken: <?= json_encode(csrf_token()) ?>,
+        signingReady: <?= json_encode($qzSigningReady) ?>
+  };
   window.POS_SETTINGS = {
         currencySymbol: <?= json_encode($currency) ?>,
         taxRate: <?= json_encode((float)($settings['tax_rate'] ?? 0)) ?>,
@@ -464,14 +484,33 @@ require_once __DIR__ . '/includes/header.php';
 <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script>
 <script>
     if (window.qz) {
-        qz.security.setCertificatePromise((resolve) => resolve());
-        qz.security.setSignaturePromise(() => (resolve) => resolve());
+        qz.security.setCertificatePromise((resolve, reject) => {
+            if (window.QZ_PRINT_SETTINGS.signingReady) {
+                resolve(window.QZ_PRINT_SETTINGS.certificate);
+            } else {
+                reject(new Error('QZ Tray signing certificate is not configured.'));
+            }
+        });
+        qz.security.setSignatureAlgorithm('SHA512');
+        qz.security.setSignaturePromise((toSign) => (resolve, reject) => {
+            fetch('api/qz-sign.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': window.QZ_PRINT_SETTINGS.csrfToken
+                },
+                body: JSON.stringify({ data: toSign })
+            })
+                .then(async (response) => {
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.message || 'Could not sign QZ Tray request.');
+                    }
+                    resolve(result.signature);
+                })
+                .catch(reject);
+        });
     }
-
-    window.QZ_PRINT_SETTINGS = {
-        mainPrinter: 'XP-80C (copy 1)',
-        kitchenPrinter: 'XP-80C (copy 2)'
-    };
 </script>
 <script src="<?= BASE_URL ?>/assets/js/pos.js?v=<?= filemtime(__DIR__ . '/assets/js/pos.js') ?>"></script>
 <script>

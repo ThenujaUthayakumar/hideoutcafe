@@ -1,1 +1,4 @@
 /config/config.php
+/config/qz-tray.php
+/config/qz-tray-certificate.pem
+/config/qz-tray-private-key.pem

@@ -33,6 +33,7 @@ A high-performance, modern, and beautiful Point of Sale (POS) and cafe managemen
 5. **Receipts & Invoices**:
    - **80mm & 58mm Thermal Printer Slip** (`print_receipt.php`) formatted for direct POS receipt printers.
    - **A4 Printable Tax Invoice** (`order_view.php`) for corporate orders and records.
+   - POS checkout can send the existing cashier and kitchen receipt layouts directly to separate QZ Tray printers.
 
 6. **Customer CRM & Loyalty Points (`customers.php`)**:
    - Customer directory with purchase tracking.
@@ -84,6 +85,12 @@ Open your terminal in the `cafe-pos` directory and run the router-enabled server
 php -S localhost:8080 router.php
 ```
 Then visit: `http://localhost:8080` in your web browser. Restart an existing server with this command to enable clean page URLs.
+
+### 5. QZ Tray Printer Setup
+1. Install and run QZ Tray on the computer running the POS browser, and make sure both printers are installed in Windows with the exact names `Cashier` and `Kitchen`. QZ Tray must be running on that same computer; it routes the cashier receipt to `Cashier` and the existing kitchen ticket to `Kitchen`.
+2. Copy `config/qz-tray.example.php` to `config/qz-tray.php` and adjust the printer names or certificate/key paths if needed. The local file and signing key are ignored by Git.
+3. Configure a QZ Tray signing certificate and matching private key at the paths in that config. PHP OpenSSL must be enabled. Keep the private key local; the POS only exposes the public certificate, and `api/qz-sign.php` signs QZ requests for authenticated sessions.
+4. On the first connection, approve/trust the signing certificate in QZ Tray if prompted. After that, checkout sends both copies directly without opening a printer-selection dialog. If QZ Tray or signing is unavailable, the existing browser-print fallback remains available.
 
 ---
 

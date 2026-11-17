@@ -804,17 +804,28 @@ const PosApp = {
 
   // ===================== PRINTING (QZ) =====================
   printReceiptDirect(orderId) {
-    if (window.qz && window.QZ_PRINT_SETTINGS) {
+    if (window.qz && window.QZ_PRINT_SETTINGS && window.QZ_PRINT_SETTINGS.signingReady) {
       this.printReceiptsToConfiguredPrinters(orderId).catch((error) => {
         console.error('QZ Direct Print Error:', error);
+        if (error.printedCopies && error.printedCopies.length > 0) {
+          const printedLabels = error.printedCopies.map(copy =>
+            copy === 'main' ? 'Cashier bill' : 'Kitchen ticket'
+          );
+          Toast.error(`Printing stopped; ${printedLabels.join(' and ')} already sent. Check printers before retrying.`);
+          return;
+        }
         Toast.error('QZ printing failed. Opening browser print instead.');
         this.openReceiptPrintDialogs(orderId);
       });
       return;
     }
 
-    console.warn('QZ not available');
-    Toast.warning('QZ Tray not detected. Using browser print.');
+    if (!window.qz) {
+      console.warn('QZ not available');
+      Toast.warning('QZ Tray not detected. Using browser print.');
+    } else {
+      Toast.warning('QZ Tray signing is not configured. Using browser print.');
+    }
     this.openReceiptPrintDialogs(orderId);
   },
 
@@ -828,10 +839,18 @@ const PosApp = {
   },
 
   async printReceiptsToConfiguredPrinters(orderId) {
+    const settings = window.QZ_PRINT_SETTINGS;
+    if (!settings.mainPrinter || !settings.kitchenPrinter) {
+      throw new Error('Both Cashier and Kitchen printer names must be configured.');
+    }
+
+    let connectedByThisCall = false;
+    const printedCopies = [];
     try {
       if (!qz.websocket.isActive()) {
         console.log('Connecting to QZ Tray...');
         await qz.websocket.connect();
+        connectedByThisCall = true;
       }
 
       const printCopy = async (configuredCopy, printerName) => {
@@ -852,17 +871,30 @@ const PosApp = {
           data: receiptHtml
         }]);
 
+        printedCopies.push(copy);
         console.log(`${copy} printed successfully`);
       };
 
-      await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
-      await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
+      await printCopy('main', settings.mainPrinter);
+      await printCopy('kitchen', settings.kitchenPrinter);
 
-      await qz.websocket.disconnect();
       Toast.success('Main bill and kitchen copy sent to printers.');
     } catch (err) {
       console.error('printReceiptsToConfiguredPrinters error:', err);
+      if (printedCopies.length > 0) {
+        const printError = new Error(err && err.message ? err.message : String(err));
+        printError.printedCopies = printedCopies;
+        throw printError;
+      }
       throw err;
+    } finally {
+      if (connectedByThisCall && qz.websocket.isActive()) {
+        try {
+          await qz.websocket.disconnect();
+        } catch (disconnectError) {
+          console.warn('QZ Tray disconnect failed:', disconnectError);
+        }
+      }
     }
   },
 
