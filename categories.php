@@ -6,6 +6,7 @@ require_once __DIR__ . '/config/functions.php';
 requireRole([ROLE_ADMIN, ROLE_MANAGER]);
 
 $title = 'Categories';
+ensureCategoryWebsiteStatusSchema();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -17,17 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $icon = sanitize($_POST['icon'] ?? 'fa-mug-hot');
         $sort = (int)($_POST['sort_order'] ?? 0);
         $status = sanitize($_POST['status'] ?? 'active');
+        $websiteStatus = ($_POST['website_status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
 
         if ($id) {
             db()->query(
-                "UPDATE categories SET name = :name, slug = :slug, icon = :icon, sort_order = :sort, status = :st WHERE id = :id",
-                [':name' => $name, ':slug' => $slug, ':icon' => $icon, ':sort' => $sort, ':st' => $status, ':id' => $id]
+                "UPDATE categories SET name = :name, slug = :slug, icon = :icon, sort_order = :sort, status = :st, website_status = :website_status WHERE id = :id",
+                [':name' => $name, ':slug' => $slug, ':icon' => $icon, ':sort' => $sort, ':st' => $status, ':website_status' => $websiteStatus, ':id' => $id]
             );
             setFlash('success', "Category '$name' updated.");
         } else {
             db()->query(
-                "INSERT INTO categories (name, slug, icon, sort_order, status) VALUES (:name, :slug, :icon, :sort, :st)",
-                [':name' => $name, ':slug' => $slug, ':icon' => $icon, ':sort' => $sort, ':st' => $status]
+                "INSERT INTO categories (name, slug, icon, sort_order, status, website_status) VALUES (:name, :slug, :icon, :sort, :st, :website_status)",
+                [':name' => $name, ':slug' => $slug, ':icon' => $icon, ':sort' => $sort, ':st' => $status, ':website_status' => $websiteStatus]
             );
             setFlash('success', "New category '$name' added.");
         }
@@ -52,6 +54,7 @@ $categories = db()->fetchAll("
         c.icon,
         c.sort_order,
         c.status,
+        c.website_status,
         COUNT(p.id) AS product_count
     FROM categories c
     LEFT JOIN products p ON c.id = p.category_id
@@ -61,7 +64,8 @@ $categories = db()->fetchAll("
         c.slug,
         c.icon,
         c.sort_order,
-        c.status
+        c.status,
+        c.website_status
     ORDER BY c.sort_order ASC
 ");
 
@@ -91,7 +95,8 @@ require_once __DIR__ . '/includes/sidebar.php';
                             <th class="p-3.5">FontAwesome Icon</th>
                             <th class="p-3.5 text-center">Items Count</th>
                             <th class="p-3.5 text-center">Sort Order</th>
-                            <th class="p-3.5 text-center">Status</th>
+                            <th class="p-3.5 text-center">POS Status</th>
+                            <th class="p-3.5 text-center">Website Status</th>
                             <th class="p-3.5 text-center">Actions</th>
                         </tr>
                     </thead>
@@ -110,6 +115,11 @@ require_once __DIR__ . '/includes/sidebar.php';
                             <td class="p-3.5 text-center">
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase <?= $c['status'] === 'active' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-stone-800 text-stone-400' ?>">
                                     <?= e($c['status']) ?>
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-center">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase <?= $c['website_status'] === 'active' ? 'bg-sky-950 text-sky-300 border border-sky-800' : 'bg-stone-800 text-stone-400' ?>">
+                                    <?= e($c['website_status']) ?>
                                 </span>
                             </td>
                             <td class="p-3.5 text-center">
@@ -162,11 +172,19 @@ require_once __DIR__ . '/includes/sidebar.php';
                 </div>
             </div>
             <div>
-                <label class="block text-xs font-bold text-stone-300 mb-1">Status</label>
+                <label class="block text-xs font-bold text-stone-300 mb-1">POS Status</label>
                 <select name="status" id="cat_form_status" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                 </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-stone-300 mb-1">Website Status</label>
+                <select name="website_status" id="cat_form_website_status" class="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+                <p class="mt-1 text-[10px] text-stone-500">Controls website visibility independently of POS Status.</p>
             </div>
 
             <div class="pt-2 flex gap-2">
@@ -185,6 +203,7 @@ function openCategoryModal() {
   document.getElementById('cat_form_icon').value = 'fa-mug-hot';
   document.getElementById('cat_form_sort').value = '0';
   document.getElementById('cat_form_status').value = 'active';
+  document.getElementById('cat_form_website_status').value = 'active';
   openModal('category-form-modal');
 }
 function editCategory(c) {
@@ -194,6 +213,7 @@ function editCategory(c) {
   document.getElementById('cat_form_icon').value = c.icon;
   document.getElementById('cat_form_sort').value = c.sort_order;
   document.getElementById('cat_form_status').value = c.status;
+  document.getElementById('cat_form_website_status').value = c.website_status;
   openModal('category-form-modal');
 }
 </script>

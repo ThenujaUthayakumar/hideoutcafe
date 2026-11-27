@@ -30,5 +30,9 @@ if ($query !== '') {
 $sql .= " ORDER BY c.id ASC LIMIT 25";
 
 $customers = db()->fetchAll($sql, $params);
+foreach ($customers as &$customer) {
+    $customer['is_birthday'] = substr((string)($customer['dob'] ?? ''), 5, 5) === date('m-d');
+}
+unset($customer);
 
 jsonResponse(['success' => true, 'customers' => $customers]);
