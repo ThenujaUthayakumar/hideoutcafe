@@ -51,7 +51,7 @@ $modifiers = db()->fetchAll(
      ORDER BY category ASC, name ASC"
 );
 $tables = db()->fetchAll("SELECT * FROM tables ORDER BY table_number ASC");
-$customers = db()->fetchAll("SELECT c.id, c.name, c.phone, c.loyalty_points, NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.payment_status IN ('paid', 'unpaid') AND o.order_status <> 'cancelled') AS is_first_order FROM customers c ORDER BY c.id ASC LIMIT 50");
+$customers = db()->fetchAll("SELECT c.id, c.name, c.phone, c.dob, c.loyalty_points, NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.payment_status IN ('paid', 'unpaid') AND o.order_status <> 'cancelled') AS is_first_order FROM customers c ORDER BY c.id ASC LIMIT 50");
 
 $preselectedTableId = !empty($_GET['table_id']) ? (int)$_GET['table_id'] : null;
 $preselectedTableName = 'No Table';
@@ -314,6 +314,9 @@ require_once __DIR__ . '/includes/header.php';
                         <div>
                             <h4 class="font-bold text-xs text-white"><?= e($c['name']) ?></h4>
                             <p class="text-[11px] text-stone-400"><?= e($c['phone']) ?></p>
+                            <?php if (substr((string)($c['dob'] ?? ''), 5, 5) === date('m-d')): ?>
+                            <span class="block mt-1 text-[10px] font-bold text-amber-300"><i class="fa-solid fa-cake-candles mr-1"></i>Happy Birthday!</span>
+                            <?php endif; ?>
                         </div>
                         <span class="text-xs font-extrabold text-red-400 bg-red-950/70 border border-red-900 px-2 py-0.5 rounded-lg"><?= number_format((float)$c['loyalty_points'], 2) ?> pts</span>
                     </div>

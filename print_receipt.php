@@ -23,7 +23,7 @@ if (hasRole(ROLE_CASHIER)) {
 }
 
 $order = db()->fetchOne(
-    "SELECT o.*, t.name as table_name, u.name as cashier_name, c.name as customer_name 
+    "SELECT o.*, t.name as table_name, u.name as cashier_name, c.name as customer_name, c.dob as customer_dob
      FROM orders o 
      LEFT JOIN tables t ON o.table_id = t.id 
      LEFT JOIN users u ON o.user_id = u.id 
@@ -35,6 +35,8 @@ $order = db()->fetchOne(
 if (!$order) {
     die("Order not found.");
 }
+
+$order['is_customer_birthday'] = substr((string)($order['customer_dob'] ?? ''), 5, 5) === date('m-d');
 
 if ($copy !== 'kitchen' && $order['payment_status'] !== 'paid') {
     die("The customer bill is available after payment is recorded.");

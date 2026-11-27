@@ -53,7 +53,8 @@ CREATE TABLE `categories` (
   `slug` VARCHAR(100) NOT NULL UNIQUE,
   `icon` VARCHAR(50) DEFAULT 'fa-mug-hot',
   `sort_order` INT DEFAULT 0,
-  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active'
+  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+  `website_status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Products

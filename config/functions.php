@@ -226,6 +226,17 @@ function ensureCustomerDobSchema(): void {
     }
 }
 
+function ensureCategoryWebsiteStatusSchema(): void {
+    static $checked = false;
+    if ($checked) return;
+
+    if (!db()->fetchOne("SHOW COLUMNS FROM categories LIKE 'website_status'")) {
+        db()->query("ALTER TABLE categories ADD COLUMN website_status ENUM('active', 'inactive') NOT NULL DEFAULT 'active' AFTER status");
+    }
+
+    $checked = true;
+}
+
 function ensureUserUsernameSchema(): void {
     static $checked = false;
     if ($checked) return;

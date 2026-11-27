@@ -426,6 +426,14 @@ const PosApp = {
         phone.className = 'block text-[11px] text-stone-400';
         phone.textContent = customer.phone || '';
         details.append(name, phone);
+        if (customer.is_birthday) {
+          const birthday = document.createElement('span');
+          birthday.className = 'block mt-1 text-[10px] font-bold text-amber-300';
+          const icon = document.createElement('i');
+          icon.className = 'fa-solid fa-cake-candles mr-1';
+          birthday.append(icon, document.createTextNode('Happy Birthday!'));
+          details.appendChild(birthday);
+        }
 
         const loyaltyPoints = document.createElement('span');
         loyaltyPoints.className = 'text-xs font-extrabold text-red-400 bg-red-950/70 border border-red-900 px-2 py-0.5 rounded-lg';

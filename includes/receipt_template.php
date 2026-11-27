@@ -143,6 +143,11 @@ $formatReceiptAmount = static function ($amount): string {
         <div class="text-xs text-stone-700 font-medium leading-tight">
             <?= nl2br(e($settings['receipt_footer'] ?? 'Thank you for your visit!')) ?>
         </div>
+        <?php if (!empty($order['is_customer_birthday'])): ?>
+        <div class="text-xs text-amber-700 font-bold leading-tight">
+            🎭The Professor says: <?= e($order['customer_name'] ?? ''); ?>, have an unforgettable Happy Birthday!🎂
+        </div>
+        <?php endif; ?>
         <!-- <div class="text-[10px] text-stone-400 font-mono tracking-widest pt-1">
             * <?= e($order['invoice_no']) ?> *
         </div> -->
