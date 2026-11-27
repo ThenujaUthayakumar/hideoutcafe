@@ -259,7 +259,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                                 </td>
                                 <td class="p-3 text-stone-400"><?= e($ro['cashier_name'] ?? 'Staff') ?></td>
                                 <td class="p-3">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-stone-800 text-stone-300 border border-stone-700"><?= e($ro['payment_method']) ?></span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-stone-800 text-stone-300 border border-stone-700"><?= e(getPaymentMethodLabel($ro['payment_method'])) ?></span>
                                 </td>
                                 <td class="p-3">
                                     <?php

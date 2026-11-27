@@ -126,7 +126,7 @@ $formatReceiptAmount = static function ($amount): string {
         <div class="receipt-divider"></div>
         <?php if ($order['paid_amount'] > 0): ?>
         <div class="flex justify-between font-normal">
-            <span><?= e($order['payment_method']) ?></span>
+            <span><?= e(getPaymentMethodLabel($order['payment_method'])) ?></span>
             <span><?= number_format($order['paid_amount'], 2) ?></span>
         </div>
         <?php endif; ?>

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Aura Cafe POS - Global Application Utilities
  */
 

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * The Hide Out Cafe - Interactive POS Terminal (Black & Red Theme)
  */
@@ -51,7 +51,7 @@ $modifiers = db()->fetchAll(
      ORDER BY category ASC, name ASC"
 );
 $tables = db()->fetchAll("SELECT * FROM tables ORDER BY table_number ASC");
-$customers = db()->fetchAll("SELECT c.id, c.name, c.phone, c.loyalty_points, NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid') AS is_first_order FROM customers c ORDER BY c.id ASC LIMIT 50");
+$customers = db()->fetchAll("SELECT c.id, c.name, c.phone, c.loyalty_points, NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.payment_status IN ('paid', 'unpaid') AND o.order_status <> 'cancelled') AS is_first_order FROM customers c ORDER BY c.id ASC LIMIT 50");
 
 $preselectedTableId = !empty($_GET['table_id']) ? (int)$_GET['table_id'] : null;
 $preselectedTableName = 'No Table';
@@ -375,63 +375,41 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
-<!-- MODAL: CHECKOUT & PAYMENT -->
+<!-- MODAL: SEND ORDER TO KITCHEN -->
 <div id="pos-checkout-modal" class="modal-overlay fixed inset-0 bg-black/80 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
     <div class="bg-stone-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-stone-800 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between pb-3 border-b border-stone-800">
             <div>
-                <h3 class="font-extrabold text-white text-lg">Payment Checkout</h3>
-                <p class="text-xs text-stone-400">Select payment mode and complete transaction</p>
+                <h3 class="font-extrabold text-white text-lg">Send Order to Kitchen</h3>
+                <p class="text-xs text-stone-400">Payment will be collected after the customer finishes.</p>
             </div>
             <button onclick="closeModal('pos-checkout-modal')" class="text-stone-400 hover:text-white p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
         <div class="py-4 space-y-4 flex-1 overflow-y-auto">
             <div class="p-4 bg-gradient-to-r from-red-950 via-stone-900 to-black rounded-2xl text-white text-center shadow-lg border border-red-900/60">
-                <span class="text-xs font-bold text-red-400 uppercase tracking-widest">Total Payable</span>
+                <span class="text-xs font-bold text-red-400 uppercase tracking-widest">Order Total</span>
                 <h2 id="pay-modal-total" class="text-3xl font-black mt-1 text-white"><?= $currency ?> 0.00</h2>
             </div>
-            <div class="grid grid-cols-4 gap-2">
-                <button type="button" onclick="setCheckoutMethod('cash')" id="btn-pay-cash" class="pay-method-pill py-3 rounded-2xl border-2 border-red-600 bg-red-950/60 text-white font-bold text-xs flex flex-col items-center gap-1 transition">
-                    <i class="fa-solid fa-money-bill-wave text-lg text-red-400"></i><span>Cash</span>
-                </button>
-                <button type="button" onclick="setCheckoutMethod('card')" id="btn-pay-card" class="pay-method-pill py-3 rounded-2xl border-2 border-stone-800 bg-stone-800 text-stone-300 font-bold text-xs flex flex-col items-center gap-1 hover:border-red-600 transition">
-                    <i class="fa-solid fa-credit-card text-lg"></i><span>Card / POS</span>
-                </button>
-                <button type="button" onclick="setCheckoutMethod('upi')" id="btn-pay-upi" class="pay-method-pill py-3 rounded-2xl border-2 border-stone-800 bg-stone-800 text-stone-300 font-bold text-xs flex flex-col items-center gap-1 hover:border-red-600 transition">
-                    <i class="fa-solid fa-qrcode text-lg"></i><span>QR Pay</span>
-                </button>
-                <button type="button" onclick="setCheckoutMethod('split')" id="btn-pay-split" class="pay-method-pill py-3 rounded-2xl border-2 border-stone-800 bg-stone-800 text-stone-300 font-bold text-xs flex flex-col items-center gap-1 hover:border-red-600 transition">
-                    <i class="fa-solid fa-arrows-split-up-and-left text-lg"></i><span>Split Bill</span>
-                </button>
-            </div>
-            <div id="cash-payment-section" class="space-y-3">
-                <div>
-                    <label class="block text-xs font-bold text-stone-300 mb-1">Cash Tendered (<?= $currency ?>)</label>
-                    <input type="number" step="0.01" min="0" id="pay-cash-tendered" oninput="PosApp.calculateChange()" class="w-full px-4 py-3 bg-stone-800 border border-stone-700 rounded-xl text-xl font-black text-white focus:bg-black focus:ring-2 focus:ring-red-600">
-                </div>
-                <div id="pay-preset-buttons" class="grid grid-cols-4 gap-2"></div>
-                <div id="pay-change-box" class="p-3.5 rounded-2xl border bg-emerald-950/60 border-emerald-800 flex items-center justify-between">
-                    <span id="pay-change-label" class="text-xs font-bold text-stone-300">Change to Return:</span>
-                    <span id="pay-change-amount" class="text-2xl font-black text-emerald-400"><?= $currency ?> 0.00</span>
-                </div>
-            </div>
+            <p class="rounded-xl border border-stone-700 bg-stone-800/70 p-3 text-xs leading-relaxed text-stone-300">
+                The kitchen ticket will print now. The customer bill and payment will be handled later from Sales &amp; Orders.
+            </p>
         </div>
         <div class="pt-3 border-t border-stone-800 flex gap-2">
             <button type="button" onclick="closeModal('pos-checkout-modal')" class="flex-1 py-3.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold rounded-xl text-xs transition">Cancel</button>
-            <button type="button" id="pay-confirm-btn" onclick="PosApp.submitOrder(window.ACTIVE_PAY_METHOD || 'cash')" class="flex-2 py-3.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-sm shadow-xl shadow-red-900/50 transition">
-                <i class="fa-solid fa-check mr-2"></i> Complete Sale & Print
+            <button type="button" id="pay-confirm-btn" onclick="PosApp.submitOrder()" class="flex-2 py-3.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-sm shadow-xl shadow-red-900/50 transition">
+                <i class="fa-solid fa-paper-plane mr-2"></i> Send to Kitchen
             </button>
         </div>
     </div>
 </div>
 
-<!-- MODAL: THERMAL RECEIPT SUCCESS PREVIEW -->
+<!-- MODAL: KITCHEN TICKET SUCCESS PREVIEW -->
 <div id="receipt-success-modal" data-order-id="" class="modal-overlay fixed inset-0 bg-black/85 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
     <div class="bg-stone-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-stone-800 flex flex-col">
         <div class="flex items-center justify-between pb-2 border-b border-stone-800">
             <div class="flex items-center gap-2">
                 <i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
-                <h4 class="font-extrabold text-white text-sm">Receipt: <span id="receipt-invoice-no"></span></h4>
+                <h4 class="font-extrabold text-white text-sm">Kitchen Ticket: <span id="receipt-invoice-no"></span></h4>
             </div>
             <button onclick="closeModal('receipt-success-modal')" class="text-stone-400 hover:text-white p-1"><i class="fa-solid fa-xmark text-base"></i></button>
         </div>
@@ -440,8 +418,8 @@ require_once __DIR__ . '/includes/header.php';
         </div>
         <div class="pt-2 flex gap-2">
             <button onclick="closeModal('receipt-success-modal')" class="flex-1 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold rounded-xl text-xs">New Sale</button>
-            <button onclick="PosApp.printReceiptDirect(document.getElementById('receipt-success-modal').dataset.orderId)" class="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md">
-                <i class="fa-solid fa-print mr-1"></i> Print Both Copies
+            <button onclick="PosApp.printKitchenTicketDirect(document.getElementById('receipt-success-modal').dataset.orderId)" class="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md">
+                <i class="fa-solid fa-print mr-1"></i> Print Kitchen Ticket
             </button>
         </div>
     </div>
@@ -481,18 +459,6 @@ require_once __DIR__ . '/includes/header.php';
       PosApp.selectTable(<?= $preselectedTableId ?>, "<?= addslashes($preselectedTableName) ?>");
     <?php endif; ?>
   });
-
-  window.ACTIVE_PAY_METHOD = 'cash';
-  function setCheckoutMethod(method) {
-    window.ACTIVE_PAY_METHOD = method;
-    document.querySelectorAll('.pay-method-pill').forEach(b => {
-      b.className = 'pay-method-pill py-3 rounded-2xl border-2 border-stone-800 bg-stone-800 text-stone-300 font-bold text-xs flex flex-col items-center gap-1 hover:border-red-600 transition';
-    });
-    const activeBtn = document.getElementById('btn-pay-' + method);
-    if (activeBtn) {
-      activeBtn.className = 'pay-method-pill py-3 rounded-2xl border-2 border-red-600 bg-red-950/60 text-white font-bold text-xs flex flex-col items-center gap-1 transition';
-    }
-  }
 
   function applyDiscountSettings() {
         PosApp.state.promotionId = document.getElementById('promotion_select').value;

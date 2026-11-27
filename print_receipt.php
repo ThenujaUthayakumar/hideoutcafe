@@ -7,9 +7,9 @@ requireAuth();
 
 $orderId = !empty($_GET['id']) ? (int)$_GET['id'] : 0;
 $autoPrint = !empty($_GET['auto_print']);
-$requestedCopy = $_GET['copy'] ?? 'all';
+$refreshOrders = !empty($_GET['refresh_orders']);
+$requestedCopy = $_GET['copy'] ?? 'main';
 $copy = in_array($requestedCopy, ['main', 'kitchen'], true) ? $requestedCopy : 'all';
-$printNextCopy = $copy === 'main' && !empty($_GET['print_next']);
 $currentUser = currentUser();
 $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
@@ -36,6 +36,10 @@ if (!$order) {
     die("Order not found.");
 }
 
+if ($copy !== 'kitchen' && $order['payment_status'] !== 'paid') {
+    die("The customer bill is available after payment is recorded.");
+}
+
 $order['items'] = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id", [':id' => $orderId]);
 ?>
 <!DOCTYPE html>
@@ -59,10 +63,10 @@ $order['items'] = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id
 
     <!-- Print Button (Hidden during print) -->
     <div class="mb-4 flex gap-2 no-print">
-        <button onclick="<?= $copy === 'all' ? "window.location.href='print_receipt.php?id={$orderId}&copy=main&print_next=1&auto_print=1'" : 'window.print()' ?>" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md transition">
+        <button onclick="window.print()" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-md transition">
             <i class="fa-solid fa-print mr-1.5"></i> Print <?= $copy === 'kitchen' ? 'Kitchen Copy' : ($copy === 'main' ? 'Main Bill' : 'Both Bills') ?>
         </button>
-        <button onclick="window.close()" class="px-4 py-2.5 bg-stone-200 text-stone-700 font-bold rounded-xl text-xs hover:bg-stone-300 transition">
+        <button onclick="closeReceiptWindow()" class="px-4 py-2.5 bg-stone-200 text-stone-700 font-bold rounded-xl text-xs hover:bg-stone-300 transition">
             Close
         </button>
     </div>
@@ -79,21 +83,39 @@ $order['items'] = db()->fetchAll("SELECT * FROM order_items WHERE order_id = :id
         <?php endif; ?>
     </div>
 
-        <?php if ($printNextCopy): ?>
-        <script>
-            window.addEventListener('afterprint', function() {
-                window.location.href = 'print_receipt.php?id=<?= $orderId ?>&copy=kitchen';
-            }, { once: true });
-        </script>
-        <?php endif; ?>
-
-        <?php if ($autoPrint): ?>
+    <?php if ($autoPrint): ?>
     <script>
-      window.onload = function() {
-        window.print();
-      };
+        window.onload = function() {
+            window.print();
+        };
     </script>
     <?php endif; ?>
+    <?php if (!$refreshOrders && $copy === 'main' && $order['payment_status'] === 'paid'): ?>
+    <script>
+        window.addEventListener('afterprint', function() {
+            if (window.opener && !window.opener.closed) {
+                window.opener.location.reload();
+            }
+        });
+    </script>
+    <?php endif; ?>
+    <script>
+        function closeReceiptWindow() {
+            <?php if ($refreshOrders): ?>
+            if (window.opener && !window.opener.closed) {
+                window.opener.location.reload();
+            }
+            <?php endif; ?>
+            window.close();
+            <?php if (!$refreshOrders): ?>
+            window.setTimeout(function() {
+                if (!window.closed) {
+                    window.location.href = <?= json_encode(BASE_URL . '/orders.php') ?>;
+                }
+            }, 150);
+            <?php endif; ?>
+        }
+    </script>
 
 </body>
 </html>
