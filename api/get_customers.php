@@ -15,7 +15,7 @@ $query = trim($_GET['q'] ?? '');
 $sql = "SELECT c.id, c.name, c.phone, c.dob, c.loyalty_points, c.total_spent,
                NOT EXISTS (
                    SELECT 1 FROM orders o
-                   WHERE o.customer_id = c.id AND o.payment_status = 'paid'
+                   WHERE o.customer_id = c.id AND o.payment_status IN ('paid', 'unpaid') AND o.order_status <> 'cancelled'
                ) AS is_first_order
         FROM customers c";
 $params = [];

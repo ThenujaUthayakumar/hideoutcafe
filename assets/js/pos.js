@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The Hide Out Cafe - Main Point of Sale Interactive Engine
  * (Clean + Fixed version)
  */
@@ -649,80 +649,19 @@ const PosApp = {
 
     const calc = this.getCalculations();
     document.getElementById('pay-modal-total').textContent = `${this.state.currencySymbol} ${calc.grandTotal.toFixed(2)}`;
-    document.getElementById('pay-cash-tendered').value = calc.grandTotal.toFixed(2);
-
-    this.calculateChange();
-    this.renderPresetCashButtons(calc.grandTotal);
 
     openModal('pos-checkout-modal');
   },
 
-  renderPresetCashButtons(total) {
-    const presetsContainer = document.getElementById('pay-preset-buttons');
-    if (!presetsContainer) return;
-
-    const rounded500 = Math.ceil(total / 500) * 500;
-    const rounded1000 = Math.ceil(total / 1000) * 1000;
-    const rounded2000 = Math.ceil(total / 2000) * 2000;
-    const rounded5000 = Math.ceil(total / 5000) * 5000;
-
-    const amounts = Array.from(new Set([total, rounded500, rounded1000, rounded2000, rounded5000, 5000])).filter(a => a >= total).slice(0, 4);
-
-    presetsContainer.innerHTML = '';
-    amounts.forEach(amt => {
-      presetsContainer.innerHTML += `
-        <button onclick="PosApp.setTenderedAmount(${amt.toFixed(2)})" class="py-2.5 px-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-900 font-bold rounded-xl text-sm transition">
-          ${this.state.currencySymbol} ${amt.toFixed(0)}
-        </button>
-      `;
-    });
-  },
-
-  setTenderedAmount(amount) {
-    document.getElementById('pay-cash-tendered').value = amount;
-    this.calculateChange();
-  },
-
-  calculateChange() {
-    const calc = this.getCalculations();
-    const tendered = parseFloat(document.getElementById('pay-cash-tendered').value) || 0;
-    const change = Math.max(0, tendered - calc.grandTotal);
-
-    document.getElementById('pay-change-amount').textContent = `${this.state.currencySymbol} ${change.toFixed(2)}`;
-
-    const changeBox = document.getElementById('pay-change-box');
-    if (tendered < calc.grandTotal) {
-      changeBox.classList.add('bg-rose-50', 'border-rose-200');
-      changeBox.classList.remove('bg-emerald-50', 'border-emerald-200');
-      document.getElementById('pay-change-label').textContent = 'Shortage Amount:';
-      document.getElementById('pay-change-amount').textContent = `-${this.state.currencySymbol} ${(calc.grandTotal - tendered).toFixed(2)}`;
-      document.getElementById('pay-change-amount').className = 'text-2xl font-black text-rose-700';
-    } else {
-      changeBox.classList.remove('bg-rose-50', 'border-rose-200');
-      changeBox.classList.add('bg-emerald-50', 'border-emerald-200');
-      document.getElementById('pay-change-label').textContent = 'Change to Return:';
-      document.getElementById('pay-change-amount').className = 'text-2xl font-black text-emerald-700';
-    }
-  },
-
-  async submitOrder(paymentMethod = 'cash') {
+  async submitOrder() {
     if (this.state.cart.length === 0) return;
 
     const calc = this.getCalculations();
-    const tendered = parseFloat(document.getElementById('pay-cash-tendered').value) || calc.grandTotal;
-
-    if (paymentMethod === 'cash' && tendered < calc.grandTotal) {
-      Toast.error('Paid cash is less than the total bill amount!');
-      return;
-    }
 
     const payload = {
       order_type: this.state.orderType,
       table_id: this.state.tableId,
       customer_id: this.state.customer ? this.state.customer.id : null,
-      payment_method: paymentMethod,
-      paid_amount: tendered,
-      change_amount: Math.max(0, tendered - calc.grandTotal),
       discount_type: this.state.discountType,
       discount_value: this.state.discountValue,
       discount_amount: calc.discount,
@@ -773,7 +712,7 @@ const PosApp = {
         SoundFX.success();
         closeModal('pos-checkout-modal');
         this.showReceiptModal(data.order);
-        this.printReceiptDirect(data.order.id);
+        this.printKitchenTicketDirect(data.order.id);
         this.clearCart();
       } else {
         Toast.error(data.message || 'Transaction failed');
@@ -786,7 +725,7 @@ const PosApp = {
       const submitBtn = document.getElementById('pay-confirm-btn');
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = `<i class="fa-solid fa-check mr-2"></i> Complete Sale & Print`;
+        submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane mr-2"></i> Send to Kitchen`;
       }
     }
   },
@@ -795,7 +734,7 @@ const PosApp = {
     const receiptFrame = document.getElementById('thermal-receipt-frame');
     const receiptModal = document.getElementById('receipt-success-modal');
     if (receiptFrame) {
-      receiptFrame.src = `print_receipt.php?id=${order.id}&embed=1`;
+      receiptFrame.src = `print_receipt.php?id=${order.id}&copy=kitchen&embed=1`;
     }
     if (receiptModal) receiptModal.dataset.orderId = order.id;
     document.getElementById('receipt-invoice-no').textContent = order.invoice_no;
@@ -803,9 +742,32 @@ const PosApp = {
   },
 
   // ===================== PRINTING (QZ) =====================
+  printKitchenTicketDirect(orderId) {
+    if (window.qz && window.QZ_PRINT_SETTINGS) {
+      this.printCopiesToConfiguredPrinters(orderId, ['kitchen']).catch((error) => {
+        console.error('QZ Kitchen Print Error:', error);
+        Toast.error('QZ printing failed. Opening browser print instead.');
+        this.openKitchenPrintDialog(orderId);
+      });
+      return;
+    }
+
+    Toast.warning('QZ Tray not detected. Using browser print.');
+    this.openKitchenPrintDialog(orderId);
+  },
+
+  openKitchenPrintDialog(orderId) {
+    const printWindow = window.open(
+      `print_receipt.php?id=${orderId}&copy=kitchen&auto_print=1`,
+      '_blank',
+      'width=400,height=600'
+    );
+    if (printWindow) printWindow.focus();
+  },
+
   printReceiptDirect(orderId) {
     if (window.qz && window.QZ_PRINT_SETTINGS) {
-      this.printReceiptsToConfiguredPrinters(orderId).catch((error) => {
+      this.printCopiesToConfiguredPrinters(orderId, ['main']).catch((error) => {
         console.error('QZ Direct Print Error:', error);
         Toast.error('QZ printing failed. Opening browser print instead.');
         this.openReceiptPrintDialogs(orderId);
@@ -820,27 +782,24 @@ const PosApp = {
 
   openReceiptPrintDialogs(orderId) {
     const printWindow = window.open(
-      `print_receipt.php?id=${orderId}&copy=main&print_next=1&auto_print=1`,
+      `print_receipt.php?id=${orderId}&copy=main&auto_print=1`,
       '_blank',
       'width=400,height=600'
     );
     if (printWindow) printWindow.focus();
   },
 
-  async printReceiptsToConfiguredPrinters(orderId) {
+  async printCopiesToConfiguredPrinters(orderId, copies) {
     try {
       if (!qz.websocket.isActive()) {
         console.log('Connecting to QZ Tray...');
         await qz.websocket.connect();
       }
 
-      const printCopy = async (configuredCopy, printerName) => {
-        const printerLabel = String(printerName || '').toLowerCase();
-        const copy = printerLabel.includes('kitchen')
-          ? 'kitchen'
-          : printerLabel.includes('cashier')
-            ? 'main'
-            : configuredCopy;
+      for (const copy of copies) {
+        const printerName = copy === 'kitchen'
+          ? window.QZ_PRINT_SETTINGS.kitchenPrinter
+          : window.QZ_PRINT_SETTINGS.mainPrinter;
         console.log(`Printing ${copy} → ${printerName}`);
         const receiptHtml = await this.loadReceiptDocument(orderId, copy);
 
@@ -853,13 +812,10 @@ const PosApp = {
         }]);
 
         console.log(`${copy} printed successfully`);
-      };
-
-      await printCopy('main', window.QZ_PRINT_SETTINGS.mainPrinter);
-      await printCopy('kitchen', window.QZ_PRINT_SETTINGS.kitchenPrinter);
+      }
 
       await qz.websocket.disconnect();
-      Toast.success('Main bill and kitchen copy sent to printers.');
+      Toast.success(copies[0] === 'kitchen' ? 'Kitchen ticket sent to printer.' : 'Customer bill sent to printer.');
     } catch (err) {
       console.error('printReceiptsToConfiguredPrinters error:', err);
       throw err;

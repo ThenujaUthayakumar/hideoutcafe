@@ -277,6 +277,11 @@ function ensurePromotionsSchema(): void {
                 discount_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 buy_quantity INT NOT NULL DEFAULT 1,
                 get_quantity INT NOT NULL DEFAULT 1,
+                analysis_category_ids TEXT NULL,
+                analysis_product_ids TEXT NULL,
+                analysis_reward_product_ids TEXT NULL,
+                analysis_buy_quantity INT NOT NULL DEFAULT 1,
+                analysis_get_quantity INT NOT NULL DEFAULT 1,
                 minimum_spend DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 minimum_points DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 day_of_week TINYINT NULL,
@@ -292,6 +297,11 @@ function ensurePromotionsSchema(): void {
             'promotion_type' => "ENUM('percentage', 'fixed', 'bogo', 'buy_x_get_y', 'combo', 'happy_hour', 'day_based', 'loyalty', 'first_order', 'minimum_spend') NOT NULL DEFAULT 'percentage'",
             'buy_quantity' => 'INT NOT NULL DEFAULT 1',
             'get_quantity' => 'INT NOT NULL DEFAULT 1',
+            'analysis_category_ids' => 'TEXT NULL',
+            'analysis_product_ids' => 'TEXT NULL',
+            'analysis_reward_product_ids' => 'TEXT NULL',
+            'analysis_buy_quantity' => 'INT NOT NULL DEFAULT 1',
+            'analysis_get_quantity' => 'INT NOT NULL DEFAULT 1',
             'minimum_spend' => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
             'minimum_points' => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
             'day_of_week' => 'TINYINT NULL'
@@ -314,6 +324,10 @@ function getPromotionTypeLabel(string $type): string {
         'day_based' => 'Day-Based Promotion', 'loyalty' => 'Customer / Loyalty',
         'first_order' => 'First Order / New Customer', 'minimum_spend' => 'Minimum Spend'
     ][$type] ?? 'Promotion';
+}
+
+function getPaymentMethodLabel(string $method): string {
+    return $method === 'upi' ? 'Bank Transfer' : $method;
 }
 
 function getActivePromotionForProduct(array $product, ?int $timestamp = null): ?array {

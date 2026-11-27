@@ -33,7 +33,7 @@ if ($action === 'recall') {
             "SELECT c.id, c.name, c.phone, c.loyalty_points AS points,
                     NOT EXISTS (
                         SELECT 1 FROM orders o
-                        WHERE o.customer_id = c.id AND o.payment_status = 'paid'
+                        WHERE o.customer_id = c.id AND o.payment_status IN ('paid', 'unpaid') AND o.order_status <> 'cancelled'
                     ) AS is_first_order
              FROM customers c
              WHERE c.id = :customer_id",

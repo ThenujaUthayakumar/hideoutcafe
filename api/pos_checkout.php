@@ -28,14 +28,6 @@ try {
     $db->beginTransaction();
 
     $currentUser = currentUser();
-    $activeShift = getOpenCashRegister();
-    // Keep shift validation available to re-enable if shift enforcement is needed.
-    // if (!$activeShift) {
-    //     throw new Exception('No shift is open. Ask an administrator to open the shift first.');
-    // }
-    // if ($activeShift && (int)$activeShift['user_id'] !== (int)$currentUser['id']) {
-    //     throw new Exception('This shift has not been confirmed by your user account.');
-    // }
 
     $invoiceNo = generateInvoiceNo();
     
@@ -43,8 +35,8 @@ try {
     $tableId       = !empty($data['table_id']) ? (int)$data['table_id'] : null;
     $customerId    = !empty($data['customer_id']) ? (int)$data['customer_id'] : null;
     $customer = $customerId ? $db->fetchOne("SELECT id, loyalty_points, created_at FROM customers WHERE id = :id", [':id' => $customerId]) : null;
-    $isFirstOrder = $customer && !(bool)$db->fetchOne("SELECT id FROM orders WHERE customer_id = :customer_id AND payment_status = 'paid' LIMIT 1", [':customer_id' => $customerId]);
-    $paymentMethod = sanitize($data['payment_method'] ?? 'cash');
+    $isFirstOrder = $customer && !(bool)$db->fetchOne("SELECT id FROM orders WHERE customer_id = :customer_id AND payment_status IN ('paid', 'unpaid') AND order_status <> 'cancelled' LIMIT 1", [':customer_id' => $customerId]);
+    $paymentMethod = 'cash';
     $subtotal      = (float)($data['subtotal'] ?? 0);
     $discountAmt   = (float)($data['discount_amount'] ?? 0);
     $discountVal   = (float)($data['discount_value'] ?? 0);
@@ -52,10 +44,10 @@ try {
     $taxAmount     = 0.0;
     $serviceCharge = 0.0;
     $grandTotal    = (float)($data['grand_total'] ?? 0);
-    $paidAmount    = (float)($data['paid_amount'] ?? $grandTotal);
-    $changeAmount  = (float)($data['change_amount'] ?? 0);
+    $paidAmount    = 0.0;
+    $changeAmount  = 0.0;
     $notes         = sanitize($data['notes'] ?? '');
-    $orderStatus   = sanitize($data['order_status'] ?? STATUS_COMPLETED);
+    $orderStatus   = STATUS_PENDING;
     $productDiscountAmount = 0.0;
     $grossSubtotal = 0.0;
     $eligibleSubtotal = 0.0;
@@ -71,7 +63,7 @@ try {
     ) VALUES (
         :invoice_no, :order_type, :table_id, :customer_id, :user_id,
         :subtotal, :discount_amount, :discount_percent, :tax_amount, :service_charge,
-        :grand_total, :paid_amount, :change_amount, :payment_method, 'paid',
+        :grand_total, :paid_amount, :change_amount, :payment_method, 'unpaid',
         :order_status, :notes, NOW()
     )";
 
@@ -194,36 +186,16 @@ try {
         );
     }
 
-    // Keep spend independent from the optional loyalty feature toggle.
-    if ($customerId && $customerId > 1) {
-        $db->query(
-            "UPDATE customers SET total_spent = total_spent + :spent, loyalty_points = ROUND((total_spent + :spent_for_points) / 1000, 2) WHERE id = :cid",
-            [':spent' => $grandTotal, ':spent_for_points' => $grandTotal, ':cid' => $customerId]
-        );
-    }
-
-    // Update Cash Register shift summary
-    if ($activeShift) {
-        $column = 'total_cash_sales';
-        if ($paymentMethod === 'card') $column = 'total_card_sales';
-        if ($paymentMethod === 'upi')  $column = 'total_upi_sales';
-        
-        $db->query(
-            "UPDATE cash_registers SET $column = $column + :amt WHERE id = :sid",
-            [':amt' => $grandTotal, ':sid' => $activeShift['id']]
-        );
-    }
-
     $db->commit();
 
     jsonResponse([
         'success' => true,
-        'message' => 'Sale completed successfully!',
+        'message' => 'Order sent to the kitchen. Payment is due when the customer is ready.',
         'order' => [
             'id'             => $orderId,
             'invoice_no'     => $invoiceNo,
             'grand_total'    => $grandTotal,
-            'payment_method' => $paymentMethod,
+            'payment_status' => 'unpaid',
             'order_status'   => $orderStatus,
             'created_at'     => date('Y-m-d H:i:s')
         ]

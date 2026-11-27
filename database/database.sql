@@ -327,13 +327,18 @@ CREATE TABLE `promotions` (
   `discount_value` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `buy_quantity` INT NOT NULL DEFAULT 1,
   `get_quantity` INT NOT NULL DEFAULT 1,
+  `analysis_category_ids` TEXT NULL,
+  `analysis_product_ids` TEXT NULL,
+  `analysis_reward_product_ids` TEXT NULL,
+  `analysis_buy_quantity` INT NOT NULL DEFAULT 1,
+  `analysis_get_quantity` INT NOT NULL DEFAULT 1,
   `minimum_spend` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `minimum_points` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `day_of_week` TINYINT NULL,
   `start_at` DATETIME NULL,
   `end_at` DATETIME NULL,
   `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Held Orders
