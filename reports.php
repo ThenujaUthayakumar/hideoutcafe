@@ -39,7 +39,7 @@ if ($export === 'csv') {
             $row['table_name'] ?? 'N/A',
             $row['cashier_name'],
             $row['customer_name'] ?? 'Walk-in',
-            strtoupper($row['payment_method']),
+            strtoupper(getPaymentMethodLabel($row['payment_method'])),
             $row['subtotal'],
             $row['discount_amount'],
             $row['service_charge'],
@@ -217,7 +217,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                     <div class="space-y-2.5">
                         <?php foreach ($paymentBreakdown as $pb): ?>
                         <div class="flex items-center justify-between p-3 bg-stone-50 rounded-xl">
-                            <span class="font-bold text-xs uppercase text-stone-800"><?= e($pb['payment_method']) ?> (<?= (int)$pb['count'] ?> orders)</span>
+                            <span class="font-bold text-xs uppercase text-stone-800"><?= e(getPaymentMethodLabel($pb['payment_method'])) ?> (<?= (int)$pb['count'] ?> orders)</span>
                             <span class="font-black text-amber-900 text-sm"><?= $currency ?><?= number_format($pb['total'], 2) ?></span>
                         </div>
                         <?php endforeach; ?>

@@ -53,7 +53,8 @@ CREATE TABLE `categories` (
   `slug` VARCHAR(100) NOT NULL UNIQUE,
   `icon` VARCHAR(50) DEFAULT 'fa-mug-hot',
   `sort_order` INT DEFAULT 0,
-  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active'
+  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+  `website_status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Products
@@ -84,10 +85,13 @@ CREATE TABLE `product_variants` (
 
 CREATE TABLE `modifiers` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `product_category_id` INT NULL DEFAULT NULL,
   `name` VARCHAR(100) NOT NULL,
   `category` VARCHAR(50) NOT NULL DEFAULT 'General',
   `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active'
+  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+  KEY `idx_modifiers_product_category_id` (`product_category_id`),
+  CONSTRAINT `fk_modifiers_product_category` FOREIGN KEY (`product_category_id`) REFERENCES `categories`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `tables` (
@@ -231,6 +235,11 @@ CREATE TABLE `promotions` (
   `discount_value` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `buy_quantity` INT NOT NULL DEFAULT 1,
   `get_quantity` INT NOT NULL DEFAULT 1,
+  `analysis_category_ids` TEXT NULL,
+  `analysis_product_ids` TEXT NULL,
+  `analysis_reward_product_ids` TEXT NULL,
+  `analysis_buy_quantity` INT NOT NULL DEFAULT 1,
+  `analysis_get_quantity` INT NOT NULL DEFAULT 1,
   `minimum_spend` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `minimum_points` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `day_of_week` TINYINT NULL,

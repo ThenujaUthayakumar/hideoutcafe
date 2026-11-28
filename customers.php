@@ -65,28 +65,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+
 $query = trim($_GET['q'] ?? '');
 $perPage = 10;
 $page = max(1, (int)($_GET['page'] ?? 1));
-$sql = "SELECT c.*, COUNT(o.id) as order_count 
-        FROM customers c 
-        LEFT JOIN orders o ON c.id = o.customer_id 
-        WHERE 1=1";
+
 $params = [];
 
+$whereSql = " WHERE 1=1";
+
 if (!empty($query)) {
-    $sql .= " AND (c.name LIKE :q1 OR c.phone LIKE :q2 OR c.dob LIKE :q3)";
+    $whereSql .= " AND (
+        c.name LIKE :q1
+        OR c.phone LIKE :q2
+        OR c.dob LIKE :q3
+    )";
+
     $params[':q1'] = "%$query%";
     $params[':q2'] = "%$query%";
     $params[':q3'] = "%$query%";
 }
-$sql .= " GROUP BY c.id ORDER BY c.id DESC";
 
-$countRow = db()->fetchOne("SELECT COUNT(*) AS total FROM ($sql) filtered_customers", $params);
+// Count customers without joining orders
+$countSql = "
+    SELECT COUNT(*) AS total
+    FROM customers c
+    $whereSql
+";
+
+$countRow = db()->fetchOne($countSql, $params);
+
 $totalCustomers = (int)($countRow['total'] ?? 0);
+
 $totalPages = max(1, (int)ceil($totalCustomers / $perPage));
 $page = min($page, $totalPages);
-$sql .= " LIMIT " . (($page - 1) * $perPage) . ", " . $perPage;
+
+$offset = ($page - 1) * $perPage;
+
+// Fetch customers and their order counts
+$sql = "
+    SELECT
+        c.*,
+        (
+            SELECT COUNT(*)
+            FROM orders o
+            WHERE o.customer_id = c.id
+        ) AS order_count
+    FROM customers c
+    $whereSql
+    ORDER BY c.id DESC
+    LIMIT $offset, $perPage
+";
+
 $customers = db()->fetchAll($sql, $params);
 
 require_once __DIR__ . '/includes/header.php';

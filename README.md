@@ -15,10 +15,10 @@ A high-performance, modern, and beautiful Point of Sale (POS) and cafe managemen
 2. **Interactive Cafe POS Terminal (`pos.php`)**:
    - Touch and keyboard-friendly layout with instant category ribbons.
    - Real-time product search with barcode & SKU matching.
-   - **Item Customization Modal**: Choose drink size (Small, Regular, Large), plant milks (Oat, Almond, Soy, Coconut), artisan syrups (Vanilla, Caramel, Hazelnut), extra espresso shots, and sweetness/ice levels.
+   - **Item Customization Modal**: Choose drink sizes and optional add-ons scoped to the product category, with modifier type, option/flavour, and price.
    - **Dine-In, Takeaway & Delivery** order modes with visual table assignment.
-   - Quick cash payment calculator with preset denomination buttons ($10, $20, $50, $100, Exact) and live return change calculator.
-   - Split payments, Card/POS terminal, and UPI/QR code payment modes.
+   - Send orders to the kitchen and print the kitchen ticket without collecting payment.
+   - Collect cash, card/POS, or bank transfer later from the order details; record the amount received and print the customer bill after payment.
    - **Order Parking / Hold Order**: Suspend active carts and recall them at any time.
 
 3. **Kitchen Display System (KDS) / Live Barista Screen (`kds.php`)**:
@@ -31,12 +31,12 @@ A high-performance, modern, and beautiful Point of Sale (POS) and cafe managemen
    - Direct 1-click ordering from any table.
 
 5. **Receipts & Invoices**:
-   - **80mm & 58mm Thermal Printer Slip** (`print_receipt.php`) formatted for direct POS receipt printers.
+   - **80mm & 58mm Thermal Printer Slips** (`print_receipt.php`) for separate kitchen tickets and paid customer bills.
    - **A4 Printable Tax Invoice** (`order_view.php`) for corporate orders and records.
 
 6. **Customer CRM & Loyalty Points (`customers.php`)**:
    - Customer directory with purchase tracking.
-   - Automatic loyalty points credit on POS checkout.
+   - Loyalty points are credited when payment is recorded.
 
 7. **Shift Cash Register & Drawer Management (`cash_register.php`)**:
    - Opening float tracking, shift sales aggregation, and end-of-day counted cash discrepancy reconciliation.
@@ -76,12 +76,14 @@ define('DB_PASS', '');
 Move or symlink the `cafe-pos` folder into your `htdocs` or `www` directory, then navigate to:
 `http://localhost/cafe-pos/`
 
+Clean page URLs (without `.php`) use Apache `mod_rewrite`; ensure it is enabled and `.htaccess` overrides are allowed. The PHP built-in server uses `router.php` as shown below; Nginx needs equivalent rewrite configuration.
+
 #### Option B: Using PHP Built-in Server
-Open your terminal in the `cafe-pos` directory and run:
+Open your terminal in the `cafe-pos` directory and run the router-enabled server:
 ```bash
-php -S localhost:8000
+php -S localhost:8080 router.php
 ```
-Then visit: `http://localhost:8000` in your web browser.
+Then visit: `http://localhost:8080` in your web browser. Restart an existing server with this command to enable clean page URLs.
 
 ---
 

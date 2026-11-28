@@ -1,0 +1,15 @@
+Options -MultiViews
+RewriteEngine On
+
+# Keep API endpoints on their existing paths.
+RewriteRule ^(?:api|assets|config|includes|scripts)/ - [L]
+
+# Redirect page URLs with a PHP extension to their clean form.
+RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$
+RewriteRule ^(.+)\.php$ $1 [R=301,L]
+
+# Serve matching PHP pages for clean URLs.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+?)/?$ $1.php [L]

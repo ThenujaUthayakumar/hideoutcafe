@@ -171,6 +171,36 @@ function ensureProductDiscountSchema(): void {
     }
 }
 
+function ensureModifierCategorySchema(): void {
+    static $checked = false;
+    if ($checked) return;
+
+    $columns = db()->fetchAll("SHOW COLUMNS FROM modifiers");
+    $existing = array_column($columns, 'Field');
+    if (!in_array('product_category_id', $existing, true)) {
+        db()->query("ALTER TABLE modifiers ADD COLUMN product_category_id INT NULL DEFAULT NULL AFTER id");
+    }
+
+    $categoryIndex = db()->fetchOne("SHOW INDEX FROM modifiers WHERE Key_name = 'idx_modifiers_product_category_id'");
+    if (!$categoryIndex) {
+        db()->query("ALTER TABLE modifiers ADD INDEX idx_modifiers_product_category_id (product_category_id)");
+    }
+
+    $categoryForeignKey = db()->fetchOne(
+        "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'modifiers'
+         AND COLUMN_NAME = 'product_category_id' AND REFERENCED_TABLE_NAME = 'categories' LIMIT 1"
+    );
+    if (!$categoryForeignKey) {
+        db()->query(
+            "ALTER TABLE modifiers ADD CONSTRAINT fk_modifiers_product_category
+             FOREIGN KEY (product_category_id) REFERENCES categories(id) ON DELETE SET NULL"
+        );
+    }
+
+    $checked = true;
+}
+
 function getActiveProductDiscount(array $product, ?int $timestamp = null): float {
     $value = max(0, (float)($product['discount_value'] ?? 0));
     if ($value <= 0) return 0.0;
@@ -194,6 +224,17 @@ function ensureCustomerDobSchema(): void {
     } catch (Exception $e) {
         // The schema file remains the source of truth for fresh installations.
     }
+}
+
+function ensureCategoryWebsiteStatusSchema(): void {
+    static $checked = false;
+    if ($checked) return;
+
+    if (!db()->fetchOne("SHOW COLUMNS FROM categories LIKE 'website_status'")) {
+        db()->query("ALTER TABLE categories ADD COLUMN website_status ENUM('active', 'inactive') NOT NULL DEFAULT 'active' AFTER status");
+    }
+
+    $checked = true;
 }
 
 function ensureUserUsernameSchema(): void {
@@ -247,6 +288,11 @@ function ensurePromotionsSchema(): void {
                 discount_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 buy_quantity INT NOT NULL DEFAULT 1,
                 get_quantity INT NOT NULL DEFAULT 1,
+                analysis_category_ids TEXT NULL,
+                analysis_product_ids TEXT NULL,
+                analysis_reward_product_ids TEXT NULL,
+                analysis_buy_quantity INT NOT NULL DEFAULT 1,
+                analysis_get_quantity INT NOT NULL DEFAULT 1,
                 minimum_spend DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 minimum_points DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 day_of_week TINYINT NULL,
@@ -262,6 +308,11 @@ function ensurePromotionsSchema(): void {
             'promotion_type' => "ENUM('percentage', 'fixed', 'bogo', 'buy_x_get_y', 'combo', 'happy_hour', 'day_based', 'loyalty', 'first_order', 'minimum_spend') NOT NULL DEFAULT 'percentage'",
             'buy_quantity' => 'INT NOT NULL DEFAULT 1',
             'get_quantity' => 'INT NOT NULL DEFAULT 1',
+            'analysis_category_ids' => 'TEXT NULL',
+            'analysis_product_ids' => 'TEXT NULL',
+            'analysis_reward_product_ids' => 'TEXT NULL',
+            'analysis_buy_quantity' => 'INT NOT NULL DEFAULT 1',
+            'analysis_get_quantity' => 'INT NOT NULL DEFAULT 1',
             'minimum_spend' => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
             'minimum_points' => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
             'day_of_week' => 'TINYINT NULL'
@@ -284,6 +335,10 @@ function getPromotionTypeLabel(string $type): string {
         'day_based' => 'Day-Based Promotion', 'loyalty' => 'Customer / Loyalty',
         'first_order' => 'First Order / New Customer', 'minimum_spend' => 'Minimum Spend'
     ][$type] ?? 'Promotion';
+}
+
+function getPaymentMethodLabel(string $method): string {
+    return $method === 'upi' ? 'Bank Transfer' : $method;
 }
 
 function getActivePromotionForProduct(array $product, ?int $timestamp = null): ?array {
