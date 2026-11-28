@@ -17,11 +17,12 @@ $sql = "SELECT c.id, c.name, c.phone, c.dob, c.loyalty_points, c.total_spent,
                    SELECT 1 FROM orders o
                    WHERE o.customer_id = c.id AND o.payment_status IN ('paid', 'unpaid') AND o.order_status <> 'cancelled'
                ) AS is_first_order
-        FROM customers c";
+        FROM customers c
+        WHERE NOT (LOWER(TRIM(c.name)) = 'walk-in customer' OR LOWER(TRIM(c.name)) = 'walk-in')";
 $params = [];
 
 if ($query !== '') {
-    $sql .= " WHERE c.name LIKE :q1 OR c.phone LIKE :q2 OR c.dob LIKE :q3";
+    $sql .= " AND (c.name LIKE :q1 OR c.phone LIKE :q2 OR c.dob LIKE :q3)";
     $params[':q1'] = "%$query%";
     $params[':q2'] = "%$query%";
     $params[':q3'] = "%$query%";

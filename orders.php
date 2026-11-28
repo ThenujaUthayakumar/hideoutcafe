@@ -10,6 +10,13 @@ $settings = getSettings();
 $currency = $settings['currency_symbol'] ?? 'Rs.';
 $currentUser = currentUser();
 $isCashier = hasRole(ROLE_CASHIER);
+$paymentCustomers = db()->fetchAll(
+    "SELECT id, name, phone, dob, loyalty_points
+     FROM customers
+     WHERE NOT (LOWER(TRIM(name)) = 'walk-in customer' OR LOWER(TRIM(name)) = 'walk-in')
+     ORDER BY name ASC
+     LIMIT 100"
+);
 $statusFilter = $_SERVER['REQUEST_METHOD'] === 'POST' ? ($_POST['status'] ?? 'all') : ($_GET['status'] ?? 'all');
 if (!in_array($statusFilter, ['all', 'pending', 'completed', 'cancelled'], true)) {
     $statusFilter = 'all';
@@ -66,10 +73,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recor
         $customerNameInput = sanitize($customerNameInput);
         $customerPhoneInput = sanitize($customerPhoneInput);
         $customerDobInput = sanitize($customerDobInput);
-        $customerId = !empty($order['customer_id']) && (int)$order['customer_id'] > 1
-            ? (int)$order['customer_id']
-            : null;
-        if ($customerId === null && ($customerNameInput !== '' || $customerPhoneInput !== '' || $customerDobInput !== '')) {
+        $selectedCustomerInput = $_POST['customer_id'] ?? '';
+        $selectedCustomerId = is_numeric($selectedCustomerInput) ? (int)$selectedCustomerInput : null;
+
+        if ($selectedCustomerId === 0) {
+            $customerId = null;
+            $db->query("UPDATE orders SET customer_id = NULL WHERE id = :id", [':id' => $orderId]);
+        } elseif ($selectedCustomerId !== null && $selectedCustomerId > 0) {
+            $selectedCustomer = $db->fetchOne(
+                "SELECT id FROM customers WHERE id = :id",
+                [':id' => $selectedCustomerId]
+            );
+            if (!$selectedCustomer) {
+                throw new Exception('The selected customer could not be found.');
+            }
+            $customerId = (int)$selectedCustomer['id'];
+            $db->query(
+                "UPDATE orders SET customer_id = :customer_id WHERE id = :id",
+                [':customer_id' => $customerId, ':id' => $orderId]
+            );
+        } else {
+            $customerId = !empty($order['customer_id']) && (int)$order['customer_id'] > 1
+                ? (int)$order['customer_id']
+                : null;
+        }
+
+        if ($selectedCustomerId === null && ($customerNameInput !== '' || $customerPhoneInput !== '' || $customerDobInput !== '')) {
             if ($customerNameInput === '' || $customerPhoneInput === '') {
                 throw new Exception('Enter both the customer name and phone number.');
             }
@@ -527,7 +556,7 @@ require_once __DIR__ . '/includes/sidebar.php';
                                             <i class="fa-solid fa-print"></i>
                                         </a>
                                         <?php if ($o['payment_status'] === 'unpaid' && $o['order_status'] !== 'cancelled'): ?>
-                                            <button type="button" onclick="openOrderPaymentModal(this)" data-order-id="<?= (int)$o['id'] ?>" data-invoice-no="<?= e($o['invoice_no']) ?>" data-grand-total="<?= e(number_format((float)$o['grand_total'], 2, '.', '')) ?>" data-has-customer="<?= $orderHasCustomer ? 'true' : 'false' ?>" class="inline-flex items-center gap-1 rounded-lg p-1.5 text-[10px] font-bold text-emerald-400 transition hover:bg-emerald-950/60" title="Pay Later / Collect Payment" aria-label="Pay later for invoice <?= e($o['invoice_no']) ?>">
+                                            <button type="button" onclick="openOrderPaymentModal(this)" data-order-id="<?= (int)$o['id'] ?>" data-invoice-no="<?= e($o['invoice_no']) ?>" data-grand-total="<?= e(number_format((float)$o['grand_total'], 2, '.', '')) ?>" data-has-customer="<?= $orderHasCustomer ? 'true' : 'false' ?>" data-customer-name="<?= e($o['customer_name'] ?? '') ?>" class="inline-flex items-center gap-1 rounded-lg p-1.5 text-[10px] font-bold text-emerald-400 transition hover:bg-emerald-950/60" title="Pay Later / Collect Payment" aria-label="Pay later for invoice <?= e($o['invoice_no']) ?>">
                                                 <i class="fa-solid fa-money-bill-wave"></i>
                                                 <span>Pay Later</span>
                                             </button>
@@ -573,23 +602,50 @@ require_once __DIR__ . '/includes/sidebar.php';
             <input type="hidden" name="status" value="<?= e($statusFilter) ?>">
             <input type="hidden" name="order_id" id="order-payment-id">
             <input type="hidden" name="payment_method" id="order-payment-method" value="cash">
+            <input type="hidden" name="customer_id" id="order-payment-customer-id" value="">
             <div id="order-payment-customer-fields" class="mt-4 hidden rounded-2xl border border-stone-700 bg-stone-950/60 p-4">
-                <p class="mb-3 text-xs font-bold text-stone-200">Customer details <span class="font-normal text-stone-500">(Optional)</span></p>
-                <div class="grid grid-cols-1 gap-3">
+                <div class="mb-3 flex items-center justify-between">
                     <div>
-                        <label for="order-payment-customer-name" class="mb-1 block text-[11px] font-bold text-stone-400">Full Name</label>
+                        <p class="text-xs font-bold text-stone-200">Customer <span class="font-normal text-stone-500">(Optional)</span></p>
+                        <p id="order-payment-selected-customer" class="mt-0.5 text-[10px] font-bold text-red-400">No Customer Selected</p>
+                    </div>
+                    <button type="button" onclick="clearPaymentCustomer()" class="rounded-lg border border-stone-700 px-2.5 py-1.5 text-[10px] font-bold text-stone-300 hover:border-stone-500 hover:text-white">No Customer Selected</button>
+                </div>
+                <div class="flex rounded-xl bg-stone-800 p-1">
+                    <button type="button" id="payment-customer-search-tab" onclick="switchPaymentCustomerTab('search')" class="flex-1 rounded-lg bg-stone-950 px-2 py-2 text-xs font-bold text-white shadow">Existing Customer</button>
+                    <button type="button" id="payment-customer-new-tab" onclick="switchPaymentCustomerTab('new')" class="flex-1 rounded-lg px-2 py-2 text-xs font-bold text-stone-400 hover:text-white">+ New Customer</button>
+                </div>
+                <div id="payment-customer-search-section" class="mt-3 space-y-2">
+                    <input type="text" id="payment-customer-search" oninput="searchPaymentCustomers(this.value)" placeholder="Search by name or phone..." class="w-full rounded-xl border border-stone-700 bg-stone-800 px-3 py-2.5 text-sm text-white focus:border-red-600 focus:outline-none">
+                    <div id="payment-customer-results" class="max-h-44 space-y-2 overflow-y-auto">
+                        <?php foreach ($paymentCustomers as $customer): ?>
+                            <button type="button" onclick="selectPaymentCustomer(<?= (int)$customer['id'] ?>, <?= json_encode($customer['name']) ?>, <?= json_encode($customer['phone']) ?>, <?= json_encode($customer['dob']) ?>)" class="flex w-full items-center justify-between rounded-xl border border-stone-800 p-3 text-left transition hover:border-red-600 hover:bg-stone-800/80">
+                                <div>
+                                    <h4 class="text-xs font-bold text-white"><?= e($customer['name']) ?></h4>
+                                    <p class="text-[11px] text-stone-400"><?= e($customer['phone']) ?></p>
+                                    <?php if (substr((string)($customer['dob'] ?? ''), 5, 5) === date('m-d')): ?>
+                                        <span class="mt-1 block text-[10px] font-bold text-amber-300"><i class="fa-solid fa-cake-candles mr-1"></i>Happy Birthday!</span>
+                                    <?php endif; ?>
+                                </div>
+                                <span class="text-[10px] font-bold text-red-400"><?= number_format((float)$customer['loyalty_points'], 2) ?> pts</span>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <div id="payment-customer-new-section" class="mt-3 hidden grid grid-cols-1 gap-3">
+                    <div>
+                        <label for="order-payment-customer-name" class="mb-1 block text-[11px] font-bold text-stone-400">Full Name *</label>
                         <input type="text" name="customer_name" id="order-payment-customer-name" maxlength="100" autocomplete="name" class="w-full rounded-xl border border-stone-700 bg-stone-800 px-3 py-2.5 text-sm text-white focus:border-red-600 focus:outline-none">
                     </div>
                     <div>
-                        <label for="order-payment-customer-phone" class="mb-1 block text-[11px] font-bold text-stone-400">Phone Number</label>
+                        <label for="order-payment-customer-phone" class="mb-1 block text-[11px] font-bold text-stone-400">Phone Number *</label>
                         <input type="tel" name="customer_phone" id="order-payment-customer-phone" maxlength="25" autocomplete="tel" class="w-full rounded-xl border border-stone-700 bg-stone-800 px-3 py-2.5 text-sm text-white focus:border-red-600 focus:outline-none">
                     </div>
                     <div>
-                        <label for="order-payment-customer-dob" class="mb-1 block text-[11px] font-bold text-stone-400">Date of Birth <span class="font-normal text-stone-500">(Optional)</span></label>
+                        <label for="order-payment-customer-dob" class="mb-1 block text-[11px] font-bold text-stone-400">Date of Birth (Optional)</label>
                         <input type="date" name="customer_dob" id="order-payment-customer-dob" class="w-full rounded-xl border border-stone-700 bg-stone-800 px-3 py-2.5 text-sm text-white focus:border-red-600 focus:outline-none">
                     </div>
                 </div>
-                <p class="mt-2 text-[10px] text-stone-500">Leave blank to continue without registering a customer. If this phone number is already registered, the existing customer will be linked to the order.</p>
             </div>
             <div class="mt-4 rounded-2xl border border-red-900/60 bg-gradient-to-r from-red-950 via-stone-900 to-black p-4 text-center text-white shadow-lg">
                 <span class="text-xs font-bold uppercase tracking-widest text-red-400">Total Payable</span>
@@ -640,6 +696,8 @@ require_once __DIR__ . '/includes/sidebar.php';
 <script>
 let activeGridPaymentTotal = 0;
 const gridPaymentCurrency = <?= json_encode($currency) ?>;
+const gridPaymentBaseUrl = <?= json_encode(rtrim(BASE_URL, '/')) ?>;
+let paymentCustomerSearchSequence = 0;
 
 function openOrderPaymentModal(button) {
     const form = document.getElementById('order-payment-form');
@@ -648,11 +706,126 @@ function openOrderPaymentModal(button) {
     document.getElementById('order-payment-id').value = button.dataset.orderId;
     document.getElementById('order-payment-invoice').textContent = button.dataset.invoiceNo;
     document.getElementById('order-payment-total').textContent = activeGridPaymentTotal.toFixed(2);
+    document.getElementById('order-payment-customer-id').value = '';
+    switchPaymentCustomerTab('search');
+    document.getElementById('payment-customer-search').value = '';
+    document.getElementById('order-payment-customer-name').value = '';
+    document.getElementById('order-payment-customer-phone').value = '';
+    document.getElementById('order-payment-customer-dob').value = '';
     const hasCustomer = button.dataset.hasCustomer === 'true';
+    document.getElementById('order-payment-selected-customer').textContent =
+        hasCustomer && button.dataset.customerName ? button.dataset.customerName : 'No Customer Selected';
     document.getElementById('order-payment-customer-fields').classList.toggle('hidden', hasCustomer);
     document.getElementById('order-payment-amount').value = activeGridPaymentTotal.toFixed(2);
     setGridPaymentMethod('cash');
+    searchPaymentCustomers('');
     openModal('order-payment-modal');
+}
+
+function switchPaymentCustomerTab(tab) {
+    const searchSection = document.getElementById('payment-customer-search-section');
+    const newSection = document.getElementById('payment-customer-new-section');
+    const searchTab = document.getElementById('payment-customer-search-tab');
+    const newTab = document.getElementById('payment-customer-new-tab');
+    document.getElementById('order-payment-customer-id').value = '';
+
+    if (tab === 'new') {
+        document.getElementById('order-payment-customer-id').value = '';
+        document.getElementById('order-payment-customer-name').value = '';
+        document.getElementById('order-payment-customer-phone').value = '';
+        document.getElementById('order-payment-customer-dob').value = '';
+        document.getElementById('order-payment-selected-customer').textContent = 'No Customer Selected';
+        searchSection.classList.add('hidden');
+        newSection.classList.remove('hidden');
+        newTab.className = 'flex-1 rounded-lg bg-stone-950 px-2 py-2 text-xs font-bold text-white shadow';
+        searchTab.className = 'flex-1 rounded-lg px-2 py-2 text-xs font-bold text-stone-400 hover:text-white';
+    } else {
+        newSection.classList.add('hidden');
+        searchSection.classList.remove('hidden');
+        searchTab.className = 'flex-1 rounded-lg bg-stone-950 px-2 py-2 text-xs font-bold text-white shadow';
+        newTab.className = 'flex-1 rounded-lg px-2 py-2 text-xs font-bold text-stone-400 hover:text-white';
+    }
+}
+
+function selectPaymentCustomer(id, name, phone, dob) {
+    document.getElementById('order-payment-customer-id').value = String(id);
+    document.getElementById('order-payment-customer-name').value = name || '';
+    document.getElementById('order-payment-customer-phone').value = phone || '';
+    document.getElementById('order-payment-customer-dob').value = dob || '';
+    document.getElementById('order-payment-selected-customer').textContent = name || 'No Customer Selected';
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: `Customer selected: ${name}`,
+        showConfirmButton: false,
+        timer: 1800
+    });
+}
+
+function clearPaymentCustomer() {
+    document.getElementById('order-payment-customer-id').value = '0';
+    document.getElementById('order-payment-customer-name').value = '';
+    document.getElementById('order-payment-customer-phone').value = '';
+    document.getElementById('order-payment-customer-dob').value = '';
+    document.getElementById('order-payment-selected-customer').textContent = 'No Customer Selected';
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'No customer selected',
+        showConfirmButton: false,
+        timer: 1800
+    });
+}
+
+async function searchPaymentCustomers(query) {
+    const results = document.getElementById('payment-customer-results');
+    const sequence = ++paymentCustomerSearchSequence;
+    try {
+        const response = await fetch(`${gridPaymentBaseUrl}/api/get_customers.php?q=${encodeURIComponent(query.trim())}`, {
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store'
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Could not search customers');
+        if (sequence !== paymentCustomerSearchSequence) return;
+        results.replaceChildren();
+        if (!data.customers || data.customers.length === 0) {
+            results.textContent = 'No customers found.';
+            results.className = 'text-xs text-stone-400';
+            return;
+        }
+        results.className = 'max-h-44 space-y-2 overflow-y-auto';
+        data.customers.forEach(customer => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'flex w-full items-center justify-between rounded-xl border border-stone-800 p-3 text-left transition hover:border-red-600 hover:bg-stone-800/80';
+            row.onclick = () => selectPaymentCustomer(customer.id, customer.name, customer.phone, customer.dob || '');
+            const details = document.createElement('div');
+            const name = document.createElement('h4');
+            name.className = 'text-xs font-bold text-white';
+            name.textContent = customer.name;
+            const phone = document.createElement('p');
+            phone.className = 'text-[11px] text-stone-400';
+            phone.textContent = customer.phone || '';
+            details.append(name, phone);
+            if (customer.is_birthday) {
+                const birthday = document.createElement('span');
+                birthday.className = 'mt-1 block text-[10px] font-bold text-amber-300';
+                birthday.innerHTML = '<i class="fa-solid fa-cake-candles mr-1"></i>Happy Birthday!';
+                details.appendChild(birthday);
+            }
+            const points = document.createElement('span');
+            points.className = 'text-[10px] font-bold text-red-400';
+            points.textContent = `${Number(customer.loyalty_points || 0).toFixed(2)} pts`;
+            row.append(details, points);
+            results.appendChild(row);
+        });
+    } catch (error) {
+        if (sequence !== paymentCustomerSearchSequence) return;
+        results.textContent = 'Could not load customers.';
+    }
 }
 
 function setGridPaymentMethod(method) {
